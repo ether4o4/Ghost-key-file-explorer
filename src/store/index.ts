@@ -135,7 +135,7 @@ export const useGKStore = create<GKStore>((set, get) => ({
   widgets: [],
   timeline: [],
   clusters: [],
-  activePanel: 'files',
+  activePanel: 'homescreen',
   leftSection: 'all',
   selectedFileIds: [],
   viewMode: 'grid',
@@ -155,7 +155,8 @@ export const useGKStore = create<GKStore>((set, get) => ({
 
   // ── Load all data ──
   loadAll: async () => {
-    await Promise.all([
+    // Load each independently so one failure doesn't block others
+    await Promise.allSettled([
       get().loadFiles(),
       get().loadBundles(),
       get().loadVaults(),
