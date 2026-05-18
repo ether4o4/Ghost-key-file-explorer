@@ -296,13 +296,28 @@ export const useGKStore = create<GKStore>((set, get) => ({
     await get().loadFiles();
   },
 
+  
   openFile: async (fileId) => {
     const file = await db.files.get(fileId);
     if (!file) return;
-    await db.files.update(fileId, { lastOpenedAt: Date.now() });
-    await recordEvent('file_opened', `"${file.name}" opened`, { fileId, fileSku: file.sku });
-    await get().loadTimeline();
+
+    if (file.isEncrypted) {
+      const password = prompt('Enter vault password to decrypt:');
+      if (!password) return;
+      try {
+        const { decryptContent } = await import('../core/vault');
+        const decrypted = await decryptContent(file.encryptedContent!, file.encryptionIv!, password);
+        alert('Decrypted Content:
+' + decrypted);
+      } catch (e) {
+        alert('Decryption failed. Incorrect password?');
+        return;
+      }
+    } else {
+      alert('Opening file: ' + file.name);
+    }
   },
+
 
   // ── Bundle Actions ──
   createBundle: async (name, fileIds) => {
@@ -390,6 +405,7 @@ export const useGKStore = create<GKStore>((set, get) => ({
   },
 
   addFilesToVaultAction: async (vaultId, fileIds, password) => {
+    await addFilesToVault(vaultId, fileIds, password);
     const ok = await addFilesToVault(vaultId, fileIds, password);
     if (ok) {
       await get().loadVaults();
