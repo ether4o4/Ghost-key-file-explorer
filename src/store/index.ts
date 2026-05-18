@@ -49,6 +49,7 @@ interface GKStore {
   showVaultModal: boolean;
   showLimboModal: boolean;
   showAnalysisPanel: boolean;
+  showMobileDrawer: boolean;
   isDragging: boolean;
   notification: { message: string; type: 'info' | 'success' | 'error' | 'warn' } | null;
 
@@ -119,6 +120,7 @@ interface GKStore {
   setShowVaultModal: (show: boolean) => void;
   setShowLimboModal: (show: boolean) => void;
   setShowAnalysisPanel: (show: boolean) => void;
+  setShowMobileDrawer: (show: boolean) => void;
   setIsDragging: (d: boolean) => void;
   notify: (message: string, type?: 'info' | 'success' | 'error' | 'warn') => void;
   clearNotification: () => void;
@@ -150,6 +152,7 @@ export const useGKStore = create<GKStore>((set, get) => ({
   showVaultModal: false,
   showLimboModal: false,
   showAnalysisPanel: false,
+  showMobileDrawer: false,
   isDragging: false,
   notification: null,
 
@@ -593,6 +596,7 @@ export const useGKStore = create<GKStore>((set, get) => ({
   setShowVaultModal: (show) => set({ showVaultModal: show }),
   setShowLimboModal: (show) => set({ showLimboModal: show }),
   setShowAnalysisPanel: (show) => set({ showAnalysisPanel: show }),
+  setShowMobileDrawer: (show) => set({ showMobileDrawer: show }),
   setIsDragging: (d) => set({ isDragging: d }),
   notify: (message, type = 'info') => {
     set({ notification: { message, type } });
