@@ -46,7 +46,10 @@ export interface GKFile {
   bundleIds: number[];
   source: string;        // origin label (Downloads, Desktop, iCloud, Snapchat…)
   path?: string;         // filesystem path if available
-  content?: string;      // text content for analysis
+  content?: string;
+  isEncrypted?: boolean;
+  encryptedContent?: string;
+  encryptionIv?: string;      // text content for analysis
   dataUrl?: string;      // base64 data URL for preview
   createdAt: number;     // epoch ms
   modifiedAt: number;
@@ -183,7 +186,7 @@ export class GhostKeyDB extends Dexie {
     super('GhostKeyDB');
 
     this.version(1).stores({
-      files: '++id, sku, name, ext, mimeType, source, createdAt, importedAt, isFlagged, isPinned, *bundleIds, *skuLinks',
+      files: '++id, sku, name, ext, mimeType, source, createdAt, importedAt, isFlagged, isPinned, isEncrypted, *bundleIds, *skuLinks',
       skuClusters: '++id, rootSku, *memberSkus',
       timeline: '++id, type, fileId, fileSku, bundleId, vaultId, timestamp',
       vaults: '++id, name, type, isLocked, createdAt',
