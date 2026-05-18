@@ -190,3 +190,65 @@ export async function getAllVaults(): Promise<GKVault[]> {
 export function vaultTypeColor(type: VaultType): string {
   return { standard: '#6c63ff', forensic: '#ffd700', ephemeral: '#ff3355' }[type];
 }
+
+/**
+ * Encryption Utilities (AES-GCM)
+ */
+async function deriveKey(password: string, salt: Uint8Array) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits', 'deriveKey']
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+export async function encryptContent(content: string, password: string): Promise<{ encrypted: string; iv: string }> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(password, salt);
+  const enc = new TextEncoder();
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    enc.encode(content)
+  );
+  
+  const combined = new Uint8Array(salt.length + encrypted.byteLength);
+  combined.set(salt);
+  combined.set(new Uint8Array(encrypted), salt.length);
+  
+  return {
+    encrypted: btoa(String.fromCharCode(...combined)),
+    iv: btoa(String.fromCharCode(...iv))
+  };
+}
+
+export async function decryptContent(encryptedB64: string, ivB64: string, password: string): Promise<string> {
+  const combined = Uint8Array.from(atob(encryptedB64), c => c.charCodeAt(0));
+  const iv = Uint8Array.from(atob(ivB64), c => c.charCodeAt(0));
+  const salt = combined.slice(0, 16);
+  const data = combined.slice(16);
+  
+  const key = await deriveKey(password, salt);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    data
+  );
+  return new TextDecoder().decode(decrypted);
+}
