@@ -5,10 +5,20 @@
     <link rel="icon" type="image/svg+xml" href="/ghost.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0a0b0e" />
+    <meta name="description" content="Privacy-first local file intelligence system with smart analysis, vault encryption, and timeline exploration." />
+    <link rel="manifest" href="/manifest.json" />
     <title>Ghost Key — File Intelligence System</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .catch((err) => console.warn('SW registration failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>
