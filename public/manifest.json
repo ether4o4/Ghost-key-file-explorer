@@ -1,0 +1,30 @@
+{
+  "name": "Ghost Key — File Intelligence",
+  "short_name": "Ghost Key",
+  "description": "Privacy-first local file intelligence system with smart analysis, vault encryption, and timeline exploration.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0b0e",
+  "theme_color": "#0a0b0e",
+  "orientation": "any",
+  "categories": ["productivity", "utilities", "security"],
+  "icons": [
+    {
+      "src": "/ghost.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false,
+  "scope": "/",
+  "lang": "en-US",
+  "dir": "ltr"
+}
