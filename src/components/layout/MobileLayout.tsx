@@ -121,7 +121,7 @@ const MobileContent: React.FC = () => {
 // ─── Main Mobile Layout ───────────────────────────────────────────────────────
 
 export const MobileLayout: React.FC = () => {
-  const { showMobileDrawer, setShowMobileDrawer, activePanel } = useGKStore();
+  const { setShowMobileDrawer, activePanel } = useGKStore();
 
   return (
     <div className="flex flex-col h-full bg-ghost-bg">

@@ -46,6 +46,15 @@ Ghost Key is a **local-first, privacy-first** file engine that tracks, tags, lin
 
 ---
 
+## Android APK
+
+Ghost Key builds as an installable Android APK through Capacitor.
+
+- Local build: `npm run android:apk`
+- GitHub build: open the **Build Android APK** workflow in GitHub Actions and download the `Ghost-Key-File-Explorer-installable-debug-apk` artifact.
+- Android permissions declared: `READ_EXTERNAL_STORAGE` for Android 12 and older, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, and `READ_MEDIA_AUDIO` for Android 13+, plus legacy write access for Android 9 and older.
+- The APK uses a debug signing key by default, which is installable for testing. A Play Store/release APK still needs a real release keystore.
+
 ## 📱 UI — Android-style Dual Pane
 
 ### 🏠 Homescreen

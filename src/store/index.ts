@@ -310,8 +310,7 @@ export const useGKStore = create<GKStore>((set, get) => ({
       try {
         const { decryptContent } = await import('../core/vault');
         const decrypted = await decryptContent(file.encryptedContent!, file.encryptionIv!, password);
-        alert('Decrypted Content:
-' + decrypted);
+        alert('Decrypted Content:\n' + decrypted);
       } catch (e) {
         alert('Decryption failed. Incorrect password?');
         return;

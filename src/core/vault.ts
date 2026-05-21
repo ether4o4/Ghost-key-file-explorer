@@ -26,6 +26,7 @@ function hexToBytes(hex: string): Uint8Array {
 
 async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey> {
   const enc = new TextEncoder();
+  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
     enc.encode(password),
@@ -35,7 +36,7 @@ async function deriveKey(password: string, salt: Uint8Array): Promise<CryptoKey>
   );
 
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: salt.buffer as ArrayBuffer, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: saltBuffer, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: KEY_LENGTH },
     false,
@@ -194,8 +195,9 @@ export function vaultTypeColor(type: VaultType): string {
 /**
  * Encryption Utilities (AES-GCM)
  */
-async function deriveKey(password: string, salt: Uint8Array) {
+async function deriveContentKey(password: string, salt: Uint8Array) {
   const enc = new TextEncoder();
+  const saltBuffer = salt.buffer.slice(salt.byteOffset, salt.byteOffset + salt.byteLength) as ArrayBuffer;
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
     enc.encode(password),
@@ -206,7 +208,7 @@ async function deriveKey(password: string, salt: Uint8Array) {
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: saltBuffer,
       iterations: 100000,
       hash: 'SHA-256',
     },
@@ -220,7 +222,7 @@ async function deriveKey(password: string, salt: Uint8Array) {
 export async function encryptContent(content: string, password: string): Promise<{ encrypted: string; iv: string }> {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(password, salt);
+  const key = await deriveContentKey(password, salt);
   const enc = new TextEncoder();
   const encrypted = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
@@ -244,7 +246,7 @@ export async function decryptContent(encryptedB64: string, ivB64: string, passwo
   const salt = combined.slice(0, 16);
   const data = combined.slice(16);
   
-  const key = await deriveKey(password, salt);
+  const key = await deriveContentKey(password, salt);
   const decrypted = await crypto.subtle.decrypt(
     { name: 'AES-GCM', iv },
     key,
