@@ -3,6 +3,7 @@ import { useExplorer } from '../../store/explorerStore';
 import type { WindowState } from '../../store/explorerStore';
 import { ExplorerPane } from './ExplorerPane';
 import { PreviewOverlay } from './PreviewOverlay';
+import { DialogHost } from './DialogHost';
 import { Icon } from './Icons';
 
 /**
@@ -87,6 +88,7 @@ export const MobileExplorer: React.FC = () => {
       )}
 
       <PreviewOverlay />
+      <DialogHost />
     </div>
   );
 };

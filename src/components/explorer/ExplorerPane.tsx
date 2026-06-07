@@ -105,16 +105,12 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
   };
 
   // ── Touch interaction (phones / tablets) ──
-  // On touch there's no hover, double-click or right-click, so: tap a folder to
-  // open it, tap a file to toggle its selection, and long-press anything to open
-  // the context menu (the touch stand-in for right-click). HTML5 drag is turned
-  // off on touch entirely — it doesn't work in the Android WebView and its
-  // pointer capture fights scrolling, which is what made the UI feel frozen.
-  const onTap = (entry: DirEntry, index: number) => {
-    if (entry.kind === 'directory') {
-      activate(entry);
-      return;
-    }
+  // On touch there's no hover, double-click or right-click, so: a tap opens a
+  // folder or previews a file; once something is selected (selection mode) a tap
+  // instead toggles selection; long-press opens the context menu (which can start
+  // a selection). HTML5 drag is off on touch — it doesn't work in the Android
+  // WebView and its pointer capture fights scrolling (the old "frozen" feel).
+  const toggleSelect = (entry: DirEntry, index: number) => {
     const cur = new Set(pane.selected);
     if (cur.has(entry.name)) cur.delete(entry.name);
     else cur.add(entry.name);
@@ -151,7 +147,8 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
         longPress.current.fired = false;
         return;
       }
-      onTap(entry, index);
+      if (pane.selected.length > 0) toggleSelect(entry, index);
+      else activate(entry);
       return;
     }
     selectAt(index, e);
@@ -207,9 +204,9 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
     }
   };
 
-  const doRename = (entry: DirEntry) => {
-    const nn = window.prompt('Rename', entry.name);
-    if (nn) s().renameEntry(winId, side, entry, nn);
+  const doRename = async (entry: DirEntry) => {
+    const nn = await s().askPrompt({ title: 'Rename', defaultValue: entry.name, confirmText: 'Rename' });
+    if (nn && nn.trim()) s().renameEntry(winId, side, entry, nn.trim());
   };
 
   const transferTo = (entry: DirEntry, mode: 'move' | 'copy') => {

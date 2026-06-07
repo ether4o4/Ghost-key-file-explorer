@@ -37,6 +37,21 @@ function isWritable(dir: DirRef | undefined): dir is DirRef {
   return !!dir && !dir.category;
 }
 
+// ── In-app dialogs (replace window.prompt / confirm, which are ugly/flaky in the
+//    Android WebView) ──
+export interface DialogRequest {
+  title: string;
+  message?: string;
+  defaultValue?: string;
+  confirmText?: string;
+  danger?: boolean;
+}
+type DialogResolve = (value: string | boolean | null) => void;
+export interface DialogEntry extends DialogRequest {
+  kind: 'prompt' | 'confirm';
+  _resolve: DialogResolve;
+}
+
 export type Side = 'left' | 'right';
 export type ViewMode = 'list' | 'grid';
 export type SortKey = 'name' | 'size' | 'mtime' | 'kind';
@@ -152,10 +167,14 @@ interface ExplorerStore {
   toast: { msg: string; kind: ToastKind } | null;
   folderPrefs: Record<string, FolderPref>;
   preview: PreviewState | null;
+  dialog: DialogEntry | null;
 
   init: () => Promise<void>;
   notify: (msg: string, kind?: ToastKind) => void;
   closePreview: () => void;
+  askPrompt: (req: DialogRequest) => Promise<string | null>;
+  askConfirm: (req: DialogRequest) => Promise<boolean>;
+  resolveDialog: (value: string | boolean | null) => void;
 
   // ── Folder customization ──
   setFolderPref: (key: string, pref: FolderPref) => void;
@@ -238,6 +257,7 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     toast: null,
     folderPrefs: {},
     preview: null,
+    dialog: null,
 
     init: async () => {
       const adapter = getAdapter();
@@ -271,6 +291,22 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const p = get().preview;
       if (p?.revoke) p.revoke();
       set({ preview: null });
+    },
+
+    askPrompt: (req) =>
+      new Promise<string | null>((resolve) => {
+        set({ dialog: { ...req, kind: 'prompt', _resolve: (v) => resolve(typeof v === 'string' ? v : null) } });
+      }),
+
+    askConfirm: (req) =>
+      new Promise<boolean>((resolve) => {
+        set({ dialog: { ...req, kind: 'confirm', _resolve: (v) => resolve(v === true) } });
+      }),
+
+    resolveDialog: (value) => {
+      const d = get().dialog;
+      set({ dialog: null });
+      d?._resolve(value);
     },
 
     setFolderPref: (key, pref) => {
@@ -410,7 +446,7 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         get().notify('Open a real folder before creating one', 'info');
         return;
       }
-      const name = window.prompt('New folder name', 'New folder');
+      const name = await get().askPrompt({ title: 'New folder', defaultValue: 'New folder', confirmText: 'Create' });
       if (!name || !name.trim()) return;
       try {
         await get().adapter.mkdir(dir, name.trim());
@@ -439,7 +475,8 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       if (!dir || !p || p.selected.length === 0) return;
       const targets = p.entries.filter((e) => p.selected.includes(e.name));
       const label = targets.length === 1 ? `"${targets[0].name}"` : `${targets.length} items`;
-      if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
+      const ok = await get().askConfirm({ title: `Delete ${label}?`, message: 'This cannot be undone.', confirmText: 'Delete', danger: true });
+      if (!ok) return;
       try {
         for (const entry of targets) await get().adapter.remove(dir, entry);
         await get().refresh(id, side);

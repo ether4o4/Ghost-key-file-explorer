@@ -20,6 +20,23 @@ export const PreviewOverlay: React.FC = () => {
     return () => window.removeEventListener('keydown', onKey);
   }, [preview, close]);
 
+  // Make the Android hardware back button close the preview instead of exiting
+  // the app: push a history entry while open and unwind it on close.
+  useEffect(() => {
+    if (!preview) return;
+    let poppedByBack = false;
+    window.history.pushState({ gkPreview: true }, '');
+    const onPop = () => {
+      poppedByBack = true;
+      close();
+    };
+    window.addEventListener('popstate', onPop);
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      if (!poppedByBack) window.history.back();
+    };
+  }, [preview, close]);
+
   if (!preview) return null;
 
   return (
