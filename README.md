@@ -1,8 +1,36 @@
-# 👻 Ghost Key — File Intelligence System
+# 👻 Ghost Key — File Explorer
 
-> A forensic-grade file intelligence system disguised as a file explorer.
+> A draggable, dual-pane file explorer — Windows Explorer ergonomics, Ghost Key aesthetic.
 
-Ghost Key is a **local-first, privacy-first** file engine that tracks, tags, links, and analyzes files with zero cloud dependency. It's not just a file manager — it's a **data intelligence platform** for reconstructing timelines, clustering related evidence, and surfacing behavioral patterns.
+The app boots straight into a **desktop shell**: draggable / minimizeable / maximizeable / resizable
+windows, each hosting a **two-pane file manager** with real read/write access to the filesystem —
+**no root required**.
+
+## 🗂 Explorer (default app)
+
+- **Dual panes** with a draggable splitter — copy/move between two folders side by side.
+- **Drag & drop** entries between panes, into subfolders, or onto breadcrumbs. Hold **Ctrl/⌘** to copy
+  (default action is move), just like Windows Explorer. Drop files in from your OS to import them.
+- **Real file operations**: new folder, rename (`F2`), delete (`Del`), open. List **and** grid views,
+  sortable by name / size / modified / type.
+- **Full permissions, no root**:
+  - **Web (Chrome / Edge):** the File System Access API grants per-folder read+write when you pick a
+    folder — `Open Folder…`.
+  - **Android APK:** Capacitor Filesystem + **All-Files-Access** (`MANAGE_EXTERNAL_STORAGE`, requested
+    from system settings on first launch). Quick locations: Internal Storage, Download, Documents,
+    DCIM, Pictures, Movies, Music.
+- **No background scanning or indexing** — directories are read one level, on demand.
+
+### Get the Android APK
+
+- **CI artifact:** the **Build Android APK** workflow runs on every push/PR and uploads
+  `Ghost-Key-File-Explorer-installable-debug-apk`.
+- **Release asset:** run the **Publish Android APK** workflow (`workflow_dispatch`) to attach a stable
+  `ghost-key-file-explorer.apk` to the `android-preview` release.
+- **Local:** `npm run android:apk`.
+
+> ℹ️ The original file-intelligence engine (tagging, vaults, timeline, analysis) still lives in
+> `src/core/*` and `src/components/*`; the explorer is now the default surface.
 
 ---
 

@@ -1,29 +1,15 @@
-import { useEffect } from 'react';
-import { DualPane } from './components/layout/DualPane';
-import { useGKStore } from './store';
-import { checkEphemeralExpiry } from './core/vault';
-import { seedDemoData } from './core/seed';
+import { Desktop } from './components/explorer/Desktop';
 
+/**
+ * Ghost Key — Dual-Pane File Explorer.
+ *
+ * A Windows-style desktop shell (draggable / minimizeable / resizable windows)
+ * hosting a two-pane file manager with real read/write access to the filesystem
+ * (no root): the File System Access API on the web, Capacitor Filesystem in the
+ * Android APK. Directories are read on demand — no background scanning/indexing.
+ */
 function App() {
-  const { loadAll } = useGKStore();
-
-  useEffect(() => {
-    // Initialize DB, seed demo data if empty, then load everything
-    seedDemoData()
-      .then(() => loadAll())
-      .catch(console.error);
-
-    // Check for expired ephemeral vaults every 5 minutes
-    checkEphemeralExpiry().catch(() => {});
-    const interval = setInterval(() => checkEphemeralExpiry(), 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div className="h-screen w-screen overflow-auto bg-ghost-bg">
-      <DualPane />
-    </div>
-  );
+  return <Desktop />;
 }
 
 export default App;
