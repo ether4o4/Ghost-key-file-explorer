@@ -41,5 +41,22 @@ html, body, #root {
 
 .widget-card:hover { transform: translateY(-2px); transition: transform 0.2s ease; }
 
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Desktop wallpaper for the explorer shell */
+.gk-desktop {
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(108,99,255,0.18), transparent 60%),
+    radial-gradient(900px 500px at 110% 10%, rgba(0,212,255,0.12), transparent 55%),
+    linear-gradient(180deg, #0a0b0e 0%, #0c0d12 100%);
+}
+.gk-grid-overlay {
+  background-image:
+    linear-gradient(rgba(108,99,255,0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(108,99,255,0.05) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
 .shimmer { background: linear-gradient(90deg, #1a1d24 25%, #252830 50%, #1a1d24 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }

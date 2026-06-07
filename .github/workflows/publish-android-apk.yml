@@ -11,9 +11,21 @@ on:
         description: APK asset name
         required: false
         default: ghost-key-file-explorer.apk
+  # Rolling release: every push that changes the app refreshes the APK asset on the
+  # fixed `android-preview` tag, so the README download link always serves the latest
+  # build. `main` keeps it current after merge; the feature branch keeps it current now.
   push:
-    branches: [main]
+    branches:
+      - main
+      - claude/draggable-dual-pane-explorer-VmZWg
     paths:
+      - "src/**"
+      - "android/**"
+      - "index.html"
+      - "package.json"
+      - "package-lock.json"
+      - "capacitor.config.ts"
+      - "vite.config.*"
       - ".github/workflows/publish-android-apk.yml"
 
 permissions:
