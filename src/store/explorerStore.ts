@@ -72,6 +72,18 @@ function sameDir(a: DirRef | undefined, b: DirRef | undefined): boolean {
   return a.handle === b.handle;
 }
 
+/** True if moving/copying `entry` into `destDir` would put a folder inside itself. */
+async function isIntoSelf(entry: DirEntry, destDir: DirRef): Promise<boolean> {
+  if (entry.kind !== 'directory') return false;
+  if (entry.uri && destDir.uri) {
+    return destDir.uri === entry.uri || destDir.uri.startsWith(`${entry.uri}/`);
+  }
+  if (entry.handle && destDir.handle && entry.handle.isSameEntry) {
+    return entry.handle.isSameEntry(destDir.handle);
+  }
+  return false;
+}
+
 // ── Per-folder customization (color + icon), persisted locally ──
 // Metadata only lives in the browser/app — we never write marker files into the
 // user's folders, and there's still no scanning/indexing.
@@ -151,6 +163,8 @@ interface ExplorerStore {
   // ── Drag & drop ──
   internalDrop: (id: number, side: Side, destEntry: DirEntry | null, copy: boolean) => Promise<void>;
   externalDrop: (id: number, side: Side, dt: DataTransfer) => Promise<void>;
+  // Move/copy the selection from one pane (source) into the other pane (destination).
+  transferSelection: (id: number, fromSide: Side, copy: boolean) => Promise<void>;
 }
 
 export const useExplorer = create<ExplorerStore>((set, get) => {
@@ -428,18 +442,9 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       if (droppingOnSelf) return;
       if (!copy && !destEntry && sameDir(srcDir, destDir)) return; // move into same dir
 
-      // Block moving/copying a folder into itself or one of its descendants.
-      if (entry.kind === 'directory') {
-        let intoSelf = false;
-        if (entry.uri && destDir.uri) {
-          intoSelf = destDir.uri === entry.uri || destDir.uri.startsWith(`${entry.uri}/`);
-        } else if (entry.handle && destDir.handle && entry.handle.isSameEntry) {
-          intoSelf = await entry.handle.isSameEntry(destDir.handle);
-        }
-        if (intoSelf) {
-          get().notify('Cannot move a folder into itself', 'error');
-          return;
-        }
+      if (await isIntoSelf(entry, destDir)) {
+        get().notify('Cannot move a folder into itself', 'error');
+        return;
       }
 
       const mode = copy ? 'copy' : 'move';
@@ -469,6 +474,50 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       } catch (e) {
         get().notify(e instanceof Error ? e.message : 'Import failed', 'error');
       }
+    },
+
+    transferSelection: async (id, fromSide, copy) => {
+      const toSide: Side = fromSide === 'left' ? 'right' : 'left';
+      const srcDir = currentDir(id, fromSide);
+      const destDir = currentDir(id, toSide);
+      const srcPane = getPane(id, fromSide);
+      if (!srcDir || !srcPane) {
+        get().notify('Open a source folder first', 'info');
+        return;
+      }
+      if (!destDir) {
+        get().notify(`Open a ${toSide === 'right' ? 'destination' : 'source'} folder in the other pane first`, 'info');
+        return;
+      }
+      const entries = srcPane.entries.filter((e) => srcPane.selected.includes(e.name));
+      if (entries.length === 0) {
+        get().notify(`Select items to ${copy ? 'copy' : 'move'}`, 'info');
+        return;
+      }
+      if (!copy && sameDir(srcDir, destDir)) {
+        get().notify('Source and destination are the same folder', 'info');
+        return;
+      }
+
+      const mode = copy ? 'copy' : 'move';
+      let ok = 0;
+      for (const entry of entries) {
+        if (await isIntoSelf(entry, destDir)) {
+          get().notify(`Skipped "${entry.name}" — can't put a folder inside itself`, 'error');
+          continue;
+        }
+        try {
+          await get().adapter.transfer(srcDir, entry, destDir, mode);
+          ok++;
+        } catch (e) {
+          get().notify(e instanceof Error ? e.message : `Failed on "${entry.name}"`, 'error');
+        }
+      }
+      if (ok > 0) {
+        get().notify(`${copy ? 'Copied' : 'Moved'} ${ok} item${ok === 1 ? '' : 's'} →`, 'success');
+      }
+      await get().refresh(id, fromSide);
+      await get().refresh(id, toSide);
     },
   };
 });
