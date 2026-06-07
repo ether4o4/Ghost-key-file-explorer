@@ -72,6 +72,37 @@ function sameDir(a: DirRef | undefined, b: DirRef | undefined): boolean {
   return a.handle === b.handle;
 }
 
+// ── Per-folder customization (color + icon), persisted locally ──
+// Metadata only lives in the browser/app — we never write marker files into the
+// user's folders, and there's still no scanning/indexing.
+export interface FolderPref {
+  color?: string;
+  icon?: string;
+}
+const PREFS_KEY = 'gk:folderPrefs';
+
+function loadPrefs(): Record<string, FolderPref> {
+  try {
+    const raw = localStorage.getItem(PREFS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, FolderPref>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function savePrefs(prefs: Record<string, FolderPref>): void {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* storage unavailable / full — keep in-memory only */
+  }
+}
+
+/** Stable key for a folder: its native URI, or its name-path on the web. */
+export function folderKey(stackNames: string[], name: string): string {
+  return [...stackNames, name].join('/');
+}
+
 interface ExplorerStore {
   adapter: FsAdapter;
   roots: RootShortcut[];
@@ -79,9 +110,14 @@ interface ExplorerStore {
   zTop: number;
   nextId: number;
   toast: { msg: string; kind: ToastKind } | null;
+  folderPrefs: Record<string, FolderPref>;
 
   init: () => Promise<void>;
   notify: (msg: string, kind?: ToastKind) => void;
+
+  // ── Folder customization ──
+  setFolderPref: (key: string, pref: FolderPref) => void;
+  resetFolderPref: (key: string) => void;
 
   // ── Window lifecycle ──
   newWindow: () => void;
@@ -156,9 +192,11 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     zTop: 1,
     nextId: 1,
     toast: null,
+    folderPrefs: {},
 
     init: async () => {
       const adapter = getAdapter();
+      set({ folderPrefs: loadPrefs() });
       await adapter.ensureAccess().catch(() => false);
       const roots = await adapter.roots().catch(() => []);
       set({ adapter, roots });
@@ -170,6 +208,26 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       window.setTimeout(() => {
         if (get().toast?.msg === msg) set({ toast: null });
       }, 3200);
+    },
+
+    setFolderPref: (key, pref) => {
+      const current = get().folderPrefs[key] ?? {};
+      const merged = { ...current, ...pref };
+      // Drop empty values so a fully-cleared pref disappears.
+      if (!merged.color) delete merged.color;
+      if (!merged.icon) delete merged.icon;
+      const next = { ...get().folderPrefs };
+      if (Object.keys(merged).length === 0) delete next[key];
+      else next[key] = merged;
+      savePrefs(next);
+      set({ folderPrefs: next });
+    },
+
+    resetFolderPref: (key) => {
+      const next = { ...get().folderPrefs };
+      delete next[key];
+      savePrefs(next);
+      set({ folderPrefs: next });
     },
 
     // ── Window lifecycle ──

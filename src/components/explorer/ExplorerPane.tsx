@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { useExplorer, setDrag, getDrag } from '../../store/explorerStore';
+import { useExplorer, setDrag, getDrag, folderKey } from '../../store/explorerStore';
 import type { Side, SortKey } from '../../store/explorerStore';
 import type { DirEntry } from '../../core/fs';
 import { formatBytes, formatDate } from '../../utils/format';
@@ -16,6 +16,15 @@ interface MenuState {
   y: number;
   entry: DirEntry | null;
 }
+
+interface CustomizeState {
+  key: string;
+  entry: DirEntry;
+}
+
+// Palette + icon choices offered in the folder customization popover.
+const SWATCHES = ['#6c63ff', '#00d4ff', '#00ff88', '#ffd700', '#ff6b35', '#ff3355', '#e2e8f0', '#64748b'];
+const FOLDER_ICONS: IconName[] = ['folder', 'folderOpen', 'drive', 'documents', 'archive', 'image', 'audio', 'video', 'code', 'home'];
 
 function sortEntries(entries: DirEntry[], key: SortKey, asc: boolean): DirEntry[] {
   const dir = asc ? 1 : -1;
@@ -36,8 +45,10 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
   const pane = useExplorer((s) => s.windows.find((w) => w.id === winId)?.panes[side]);
   const roots = useExplorer((s) => s.roots);
   const adapter = useExplorer((s) => s.adapter);
+  const folderPrefs = useExplorer((s) => s.folderPrefs);
 
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [customize, setCustomize] = useState<CustomizeState | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null); // entry name or '#pane'
   const anchorRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,6 +62,21 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
   const s = useExplorer.getState;
   const hasFolder = pane.stack.length > 0;
   const otherSide: Side = side === 'left' ? 'right' : 'left';
+  const stackNames = pane.stack.map((r) => r.name);
+
+  // Stable per-folder key: native URI when available, else the name-path.
+  const keyFor = (entry: DirEntry) => entry.uri ?? folderKey(stackNames, entry.name);
+
+  // Effective icon for an entry, honouring per-folder customization.
+  const iconFor = (entry: DirEntry): { name: IconName; color: string } => {
+    if (entry.kind === 'directory') {
+      const pref = folderPrefs[keyFor(entry)];
+      if (pref) return { name: (pref.icon as IconName) ?? 'folder', color: pref.color ?? '#6c63ff' };
+    }
+    return entryIcon(entry.kind, entry.ext);
+  };
+
+  const openCustomize = (entry: DirEntry) => setCustomize({ key: keyFor(entry), entry });
 
   // ── Selection ──
   const selectAt = (index: number, e: React.MouseEvent) => {
@@ -312,7 +338,7 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
         {isGrid ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(92px,1fr))] gap-1 p-2">
             {sorted.map((entry, i) => {
-              const ic = entryIcon(entry.kind, entry.ext);
+              const ic = iconFor(entry);
               const selected = pane.selected.includes(entry.name);
               return (
                 <div
@@ -339,7 +365,9 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
                     selected ? 'bg-ghost-accent/25 ring-1 ring-ghost-accent/50' : 'hover:bg-ghost-card'
                   } ${dragOver === entry.name ? 'bg-ghost-accent/20 ring-1 ring-ghost-accent' : ''}`}
                 >
-                  <Icon name={ic.name} size={34} className="shrink-0" />
+                  <span style={{ color: ic.color }} className="shrink-0">
+                    <Icon name={ic.name} size={34} />
+                  </span>
                   <span className="text-[11px] text-center leading-tight text-ghost-text line-clamp-2 break-all w-full">
                     {entry.name}
                   </span>
@@ -358,7 +386,7 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
             </thead>
             <tbody>
               {sorted.map((entry, i) => {
-                const ic = entryIcon(entry.kind, entry.ext);
+                const ic = iconFor(entry);
                 const selected = pane.selected.includes(entry.name);
                 return (
                   <tr
@@ -424,6 +452,22 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
           onRefresh={() => s().refresh(winId, side)}
           onCopyOther={() => menu.entry && transferTo(menu.entry, 'copy')}
           onMoveOther={() => menu.entry && transferTo(menu.entry, 'move')}
+          onCustomize={menu.entry && menu.entry.kind === 'directory' ? () => openCustomize(menu.entry!) : undefined}
+        />
+      )}
+
+      {/* Folder customization popover */}
+      {customize && (
+        <CustomizePopover
+          state={customize}
+          pref={folderPrefs[customize.key] ?? {}}
+          close={() => setCustomize(null)}
+          onColor={(color) => s().setFolderPref(customize.key, { color })}
+          onIcon={(icon) => s().setFolderPref(customize.key, { icon })}
+          onReset={() => {
+            s().resetFolderPref(customize.key);
+            setCustomize(null);
+          }}
         />
       )}
     </div>
@@ -494,7 +538,8 @@ const ContextMenu: React.FC<{
   onRefresh: () => void;
   onCopyOther: () => void;
   onMoveOther: () => void;
-}> = ({ menu, close, onOpen, onRename, onDelete, onNewFolder, onRefresh, onCopyOther, onMoveOther }) => {
+  onCustomize?: () => void;
+}> = ({ menu, close, onOpen, onRename, onDelete, onNewFolder, onRefresh, onCopyOther, onMoveOther, onCustomize }) => {
   const hasEntry = !!menu.entry;
   const item = (label: string, icon: IconName, fn: () => void, danger?: boolean) => (
     <button
@@ -514,11 +559,12 @@ const ContextMenu: React.FC<{
     <>
       <div className="fixed inset-0 z-40" onClick={close} onContextMenu={(e) => { e.preventDefault(); close(); }} />
       <div
-        className="fixed z-50 min-w-[170px] py-1 rounded-lg border border-ghost-border bg-ghost-surface shadow-2xl glass animate-fade-in"
-        style={{ left: Math.min(menu.x, window.innerWidth - 190), top: Math.min(menu.y, window.innerHeight - 260) }}
+        className="fixed z-50 min-w-[180px] py-1 rounded-lg border border-ghost-border bg-ghost-surface shadow-2xl glass animate-fade-in"
+        style={{ left: Math.min(menu.x, window.innerWidth - 200), top: Math.min(menu.y, window.innerHeight - 300) }}
       >
         {hasEntry && item('Open', 'open', onOpen)}
         {hasEntry && item('Rename', 'pencil', onRename)}
+        {onCustomize && item('Customize…', 'grid', onCustomize)}
         {hasEntry && item('Copy → other pane', 'copy', onCopyOther)}
         {hasEntry && item('Move → other pane', 'move', onMoveOther)}
         {hasEntry && <div className="my-1 h-px bg-ghost-border" />}
@@ -526,6 +572,78 @@ const ContextMenu: React.FC<{
         {item('Refresh', 'refresh', onRefresh)}
         {hasEntry && <div className="my-1 h-px bg-ghost-border" />}
         {hasEntry && item('Delete', 'trash', onDelete, true)}
+      </div>
+    </>
+  );
+};
+
+const CustomizePopover: React.FC<{
+  state: CustomizeState;
+  pref: { color?: string; icon?: string };
+  close: () => void;
+  onColor: (color: string) => void;
+  onIcon: (icon: string) => void;
+  onReset: () => void;
+}> = ({ state, pref, close, onColor, onIcon, onReset }) => {
+  const activeColor = pref.color ?? '#6c63ff';
+  const activeIcon = (pref.icon as IconName) ?? 'folder';
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={close} onContextMenu={(e) => { e.preventDefault(); close(); }} />
+      <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[280px] rounded-xl border border-ghost-border bg-ghost-surface shadow-2xl glass animate-fade-in p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span style={{ color: activeColor }}>
+            <Icon name={activeIcon} size={22} />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[13px] font-medium text-ghost-text truncate">{state.entry.name}</div>
+            <div className="text-[10px] text-ghost-muted">Customize folder</div>
+          </div>
+        </div>
+
+        <div className="text-[10px] uppercase tracking-wider text-ghost-muted mb-1.5">Color</div>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {SWATCHES.map((c) => (
+            <button
+              key={c}
+              onClick={() => onColor(c)}
+              title={c}
+              style={{ background: c }}
+              className={`w-6 h-6 rounded-full transition-transform hover:scale-110 ${
+                activeColor === c ? 'ring-2 ring-offset-2 ring-offset-ghost-surface ring-white' : ''
+              }`}
+            />
+          ))}
+        </div>
+
+        <div className="text-[10px] uppercase tracking-wider text-ghost-muted mb-1.5">Icon</div>
+        <div className="grid grid-cols-5 gap-1.5 mb-3">
+          {FOLDER_ICONS.map((name) => (
+            <button
+              key={name}
+              onClick={() => onIcon(name)}
+              title={name}
+              style={{ color: activeColor }}
+              className={`flex items-center justify-center h-9 rounded-lg border transition-colors ${
+                activeIcon === name ? 'border-ghost-accent bg-ghost-accent/15' : 'border-ghost-border hover:bg-ghost-card'
+              }`}
+            >
+              <Icon name={name} size={18} />
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between pt-1">
+          <button onClick={onReset} className="text-[12px] text-ghost-muted hover:text-ghost-red transition-colors">
+            Reset
+          </button>
+          <button
+            onClick={close}
+            className="px-3 py-1.5 rounded-lg bg-ghost-accent/20 border border-ghost-accent/40 text-[12px] text-ghost-text hover:bg-ghost-accent/30 transition-colors"
+          >
+            Done
+          </button>
+        </div>
       </div>
     </>
   );
