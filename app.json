@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Ghost Key Mobile",
+    "slug": "ghost-key-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#0a0a0a",
+      "resizeMode": "contain"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ghostkey.mobile"
+    },
+    "android": {
+      "package": "com.ghostkey.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0a"
+      }
+    },
+    "plugins": [
+      [
+        "expo-sqlite",
+        {
+          "sqlitePath": "ghostkey.db"
+        }
+      ]
+    ]
+  }
+}
