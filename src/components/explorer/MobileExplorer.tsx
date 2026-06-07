@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useExplorer } from '../../store/explorerStore';
 import type { WindowState } from '../../store/explorerStore';
 import { ExplorerPane } from './ExplorerPane';
+import { PreviewOverlay } from './PreviewOverlay';
 import { Icon } from './Icons';
 
 /**
@@ -84,6 +85,8 @@ export const MobileExplorer: React.FC = () => {
           {toast.msg}
         </div>
       )}
+
+      <PreviewOverlay />
     </div>
   );
 };

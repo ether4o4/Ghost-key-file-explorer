@@ -411,9 +411,20 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
                     selected ? 'bg-ghost-accent/25 ring-1 ring-ghost-accent/50' : 'hover:bg-ghost-card'
                   } ${dragOver === entry.name ? 'bg-ghost-accent/20 ring-1 ring-ghost-accent' : ''}`}
                 >
-                  <span style={{ color: ic.color }} className="shrink-0">
-                    <Icon name={ic.name} size={34} />
-                  </span>
+                  {entry.kind === 'file' && adapter.thumb(entry) ? (
+                    <img
+                      src={adapter.thumb(entry)!}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      className="w-9 h-9 object-cover rounded shrink-0 bg-ghost-card"
+                      onError={(e) => ((e.currentTarget as HTMLImageElement).style.visibility = 'hidden')}
+                    />
+                  ) : (
+                    <span style={{ color: ic.color }} className="shrink-0">
+                      <Icon name={ic.name} size={34} />
+                    </span>
+                  )}
                   <span className="text-[11px] text-center leading-tight text-ghost-text line-clamp-2 break-all w-full">
                     {entry.name}
                   </span>
@@ -466,9 +477,20 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
                   >
                     <td className="py-1 pl-2 pr-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <span style={{ color: ic.color }} className="shrink-0">
-                          <Icon name={ic.name} size={16} />
-                        </span>
+                        {entry.kind === 'file' && adapter.thumb(entry) ? (
+                          <img
+                            src={adapter.thumb(entry)!}
+                            alt=""
+                            loading="lazy"
+                            decoding="async"
+                            className="w-5 h-5 object-cover rounded shrink-0 bg-ghost-card"
+                            onError={(e) => ((e.currentTarget as HTMLImageElement).style.visibility = 'hidden')}
+                          />
+                        ) : (
+                          <span style={{ color: ic.color }} className="shrink-0">
+                            <Icon name={ic.name} size={16} />
+                          </span>
+                        )}
                         <span className="truncate text-ghost-text">{entry.name}</span>
                       </div>
                     </td>

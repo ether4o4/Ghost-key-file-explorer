@@ -6,8 +6,36 @@
  * backend-agnostic adapter in core/fs.ts (web FSA or native Capacitor).
  */
 import { create } from 'zustand';
-import { getAdapter } from '../core/fs';
+import { getAdapter, isImageExt } from '../core/fs';
 import type { DirEntry, DirRef, FsAdapter, RootShortcut } from '../core/fs';
+
+export type PreviewKind = 'image' | 'video' | 'audio' | 'text';
+export interface PreviewState {
+  name: string;
+  ext: string;
+  kind: PreviewKind;
+  url: string;
+  revoke?: () => void;
+}
+
+const VIDEO_EXTS = new Set(['mp4', 'webm', 'mov', 'm4v', '3gp', 'mkv', 'ogv']);
+const AUDIO_EXTS = new Set(['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'opus', 'amr']);
+const TEXT_EXTS = new Set(['txt', 'md', 'json', 'csv', 'log', 'xml', 'js', 'ts', 'tsx', 'css', 'html', 'yml', 'yaml', 'ini', 'conf']);
+
+/** What kind of in-app preview (if any) a file extension supports. */
+export function previewKind(ext: string): PreviewKind | null {
+  const e = ext.toLowerCase();
+  if (isImageExt(e)) return 'image';
+  if (VIDEO_EXTS.has(e)) return 'video';
+  if (AUDIO_EXTS.has(e)) return 'audio';
+  if (TEXT_EXTS.has(e)) return 'text';
+  return null;
+}
+
+/** A directory the app can write into (a real folder, not a virtual category). */
+function isWritable(dir: DirRef | undefined): dir is DirRef {
+  return !!dir && !dir.category;
+}
 
 export type Side = 'left' | 'right';
 export type ViewMode = 'list' | 'grid';
@@ -123,9 +151,11 @@ interface ExplorerStore {
   nextId: number;
   toast: { msg: string; kind: ToastKind } | null;
   folderPrefs: Record<string, FolderPref>;
+  preview: PreviewState | null;
 
   init: () => Promise<void>;
   notify: (msg: string, kind?: ToastKind) => void;
+  closePreview: () => void;
 
   // ── Folder customization ──
   setFolderPref: (key: string, pref: FolderPref) => void;
@@ -207,6 +237,7 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     nextId: 1,
     toast: null,
     folderPrefs: {},
+    preview: null,
 
     init: async () => {
       const adapter = getAdapter();
@@ -215,6 +246,18 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const roots = await adapter.roots().catch(() => []);
       set({ adapter, roots });
       if (get().windows.length === 0) get().newWindow();
+
+      // On Android, start the panes pre-separated: your own folders on top/left,
+      // phone & app folders on the bottom/right. Only seeds empty panes, so it
+      // never yanks the user back after they've navigated.
+      const cats = adapter.categoryRoots?.();
+      if (cats) {
+        const win = get().windows[get().windows.length - 1];
+        if (win) {
+          if (win.panes.left.stack.length === 0) await loadInto(win.id, 'left', [cats.personal]).catch(() => {});
+          if (win.panes.right.stack.length === 0) await loadInto(win.id, 'right', [cats.system]).catch(() => {});
+        }
+      }
     },
 
     notify: (msg, kind = 'info') => {
@@ -222,6 +265,12 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       window.setTimeout(() => {
         if (get().toast?.msg === msg) set({ toast: null });
       }, 3200);
+    },
+
+    closePreview: () => {
+      const p = get().preview;
+      if (p?.revoke) p.revoke();
+      set({ preview: null });
     },
 
     setFolderPref: (key, pref) => {
@@ -357,7 +406,10 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     // ── File ops ──
     newFolder: async (id, side) => {
       const dir = currentDir(id, side);
-      if (!dir) return;
+      if (!isWritable(dir)) {
+        get().notify('Open a real folder before creating one', 'info');
+        return;
+      }
       const name = window.prompt('New folder name', 'New folder');
       if (!name || !name.trim()) return;
       try {
@@ -399,17 +451,30 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
 
     openFile: async (_id, _side, entry) => {
       if (entry.kind !== 'file') return;
+      const kind = previewKind(entry.ext);
       try {
         const { url, revoke } = await get().adapter.resolveUrl(entry);
-        const win = window.open(url, '_blank');
-        if (!win) {
-          // Popup blocked — force a download instead.
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = entry.name;
-          a.click();
+        if (kind) {
+          // Show inside the app. (Opening a Capacitor file URL with window.open
+          // spawns a blank WebView that crashes the app — never do that here.)
+          get().closePreview();
+          set({ preview: { name: entry.name, ext: entry.ext, kind, url, revoke } });
+          return;
         }
-        if (revoke) window.setTimeout(revoke, 60_000);
+        if (get().adapter.backend === 'web') {
+          const win = window.open(url, '_blank');
+          if (!win) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = entry.name;
+            a.click();
+          }
+          if (revoke) window.setTimeout(revoke, 60_000);
+        } else {
+          // No safe in-app viewer for this type on Android — don't crash, just say so.
+          if (revoke) revoke();
+          get().notify(`No preview for .${entry.ext || 'this'} files yet`, 'info');
+        }
       } catch (e) {
         get().notify(e instanceof Error ? e.message : 'Could not open file', 'error');
       }
@@ -432,8 +497,8 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         destEntry && destEntry.kind === 'directory'
           ? get().adapter.enter(destEntry)
           : currentDir(id, side);
-      if (!destDir) {
-        get().notify('Open a folder in the target pane first', 'info');
+      if (!isWritable(destDir)) {
+        get().notify('Open a real folder in the target pane first', 'info');
         return;
       }
 
@@ -464,7 +529,7 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
 
     externalDrop: async (id, side, dt) => {
       const dir = currentDir(id, side);
-      if (!dir) return;
+      if (!isWritable(dir)) return;
       try {
         const n = await get().adapter.importDrop(dt, dir);
         if (n > 0) {
@@ -485,8 +550,8 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         get().notify('Open a source folder first', 'info');
         return;
       }
-      if (!destDir) {
-        get().notify(`Open a ${toSide === 'right' ? 'destination' : 'source'} folder in the other pane first`, 'info');
+      if (!isWritable(destDir)) {
+        get().notify('Open a real folder in the destination pane first', 'info');
         return;
       }
       const entries = srcPane.entries.filter((e) => srcPane.selected.includes(e.name));

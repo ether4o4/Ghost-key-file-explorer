@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useExplorer } from '../../store/explorerStore';
 import { ExplorerWindow } from './ExplorerWindow';
+import { PreviewOverlay } from './PreviewOverlay';
 import { Icon } from './Icons';
 
 export const Desktop: React.FC = () => {
@@ -57,6 +58,8 @@ export const Desktop: React.FC = () => {
           {toast.msg}
         </div>
       )}
+
+      <PreviewOverlay />
     </div>
   );
 };
