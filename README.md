@@ -203,3 +203,20 @@ Once everything connects:
 > This is no longer "file explorer". It becomes a **Data Intelligence System** — tracks behavior, links evidence, reconstructs timelines, surfaces patterns.
 
 Built to be the entry point for a full data intelligence workflow.
+
+---
+
+## 📲 Download the latest Android APK
+
+This link always points to the **newest build** — every push to the app refreshes it automatically
+(via the *Publish Android APK* workflow → `android-preview` release):
+
+### 👉 **[Download Ghost Key — latest APK](https://github.com/ether4o4/Ghost-key-file-explorer/releases/download/android-preview/ghost-key-file-explorer.apk)**
+
+```
+https://github.com/ether4o4/Ghost-key-file-explorer/releases/download/android-preview/ghost-key-file-explorer.apk
+```
+
+> Debug-signed and installable (enable "Install unknown apps" for your browser/file manager).
+> On first launch the app opens system settings so you can grant **All files access** — that's what
+> enables full read/write across storage **without root**.
