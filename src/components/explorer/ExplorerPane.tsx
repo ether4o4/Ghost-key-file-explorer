@@ -5,6 +5,7 @@ import type { DirEntry } from '../../core/fs';
 import { formatBytes, formatDate } from '../../utils/format';
 import { Icon, entryIcon } from './Icons';
 import type { IconName } from './Icons';
+import { IS_TOUCH } from '../../utils/touch';
 
 interface Props {
   winId: number;
@@ -52,6 +53,7 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
   const [dragOver, setDragOver] = useState<string | null>(null); // entry name or '#pane'
   const anchorRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const longPress = useRef<{ timer: number; fired: boolean }>({ timer: 0, fired: false });
 
   const sorted = useMemo(
     () => (pane ? sortEntries(pane.entries, pane.sortKey, pane.sortAsc) : []),
@@ -100,6 +102,59 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
   const activate = (entry: DirEntry) => {
     if (entry.kind === 'directory') s().enterDir(winId, side, entry);
     else s().openFile(winId, side, entry);
+  };
+
+  // ── Touch interaction (phones / tablets) ──
+  // On touch there's no hover, double-click or right-click, so: tap a folder to
+  // open it, tap a file to toggle its selection, and long-press anything to open
+  // the context menu (the touch stand-in for right-click). HTML5 drag is turned
+  // off on touch entirely — it doesn't work in the Android WebView and its
+  // pointer capture fights scrolling, which is what made the UI feel frozen.
+  const onTap = (entry: DirEntry, index: number) => {
+    if (entry.kind === 'directory') {
+      activate(entry);
+      return;
+    }
+    const cur = new Set(pane.selected);
+    if (cur.has(entry.name)) cur.delete(entry.name);
+    else cur.add(entry.name);
+    s().setSelected(winId, side, [...cur]);
+    anchorRef.current = index;
+  };
+
+  const startLongPress = (entry: DirEntry, e: React.PointerEvent) => {
+    if (!IS_TOUCH) return;
+    longPress.current.fired = false;
+    const x = e.clientX;
+    const y = e.clientY;
+    longPress.current.timer = window.setTimeout(() => {
+      longPress.current.fired = true;
+      if (!pane.selected.includes(entry.name)) s().setSelected(winId, side, [entry.name]);
+      setMenu({ x, y, entry });
+      navigator.vibrate?.(10);
+    }, 480);
+  };
+
+  const cancelLongPress = () => {
+    if (longPress.current.timer) {
+      window.clearTimeout(longPress.current.timer);
+      longPress.current.timer = 0;
+    }
+  };
+
+  // Unified entry click. On touch we tap-to-open (and ignore the click that
+  // follows a long-press); with a mouse we keep the desktop shift/ctrl select.
+  const onEntryClick = (entry: DirEntry, index: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (IS_TOUCH) {
+      if (longPress.current.fired) {
+        longPress.current.fired = false;
+        return;
+      }
+      onTap(entry, index);
+      return;
+    }
+    selectAt(index, e);
   };
 
   // ── Drag & drop ──
@@ -333,16 +388,17 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
               return (
                 <div
                   key={entry.name}
-                  draggable
+                  draggable={!IS_TOUCH}
                   onDragStart={(e) => onEntryDragStart(entry, e)}
                   onDragEnd={() => setDrag(null)}
                   onDragOver={(e) => entry.kind === 'directory' && allowDrop(e, entry.name)}
                   onDragLeave={() => entry.kind === 'directory' && dragOver === entry.name && setDragOver(null)}
                   onDrop={(e) => entry.kind === 'directory' && handleDrop(e, entry)}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    selectAt(i, e);
-                  }}
+                  onPointerDown={(e) => startLongPress(entry, e)}
+                  onPointerUp={cancelLongPress}
+                  onPointerMove={cancelLongPress}
+                  onPointerCancel={cancelLongPress}
+                  onClick={(e) => onEntryClick(entry, i, e)}
                   onDoubleClick={() => activate(entry)}
                   onContextMenu={(e) => {
                     e.preventDefault();
@@ -386,16 +442,17 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
                 return (
                   <tr
                     key={entry.name}
-                    draggable
+                    draggable={!IS_TOUCH}
                     onDragStart={(e) => onEntryDragStart(entry, e)}
                     onDragEnd={() => setDrag(null)}
                     onDragOver={(e) => entry.kind === 'directory' && allowDrop(e, entry.name)}
                     onDragLeave={() => entry.kind === 'directory' && dragOver === entry.name && setDragOver(null)}
                     onDrop={(e) => entry.kind === 'directory' && handleDrop(e, entry)}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      selectAt(i, e);
-                    }}
+                    onPointerDown={(e) => startLongPress(entry, e)}
+                    onPointerUp={cancelLongPress}
+                    onPointerMove={cancelLongPress}
+                    onPointerCancel={cancelLongPress}
+                    onClick={(e) => onEntryClick(entry, i, e)}
                     onDoubleClick={() => activate(entry)}
                     onContextMenu={(e) => {
                       e.preventDefault();
