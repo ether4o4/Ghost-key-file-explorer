@@ -1,5 +1,5 @@
 /**
- * Ghost Key — Timeline Engine
+ * NeverSoft Services — Timeline Engine
  * Records every action as an immutable event. Enables behavior reconstruction.
  */
 import { db } from './db';

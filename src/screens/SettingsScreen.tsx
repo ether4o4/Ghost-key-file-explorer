@@ -35,7 +35,7 @@ export default function SettingsScreen() {
       <Text style={{ color: '#888', fontSize: 13, textTransform: 'uppercase', marginTop: 20, marginBottom: 8, marginLeft: 4 }}>About</Text>
       <View style={{ backgroundColor: '#111', borderRadius: 12, padding: 16 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' }}>
-          <Text style={{ color: '#888', fontSize: 14 }}>App</Text><Text style={{ color: '#fff', fontSize: 14 }}>Ghost Key Mobile</Text>
+          <Text style={{ color: '#888', fontSize: 14 }}>App</Text><Text style={{ color: '#fff', fontSize: 14 }}>NeverSoft Services Mobile</Text>
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1a1a1a' }}>
           <Text style={{ color: '#888', fontSize: 14 }}>Version</Text><Text style={{ color: '#fff', fontSize: 14 }}>1.0.0</Text>
@@ -51,7 +51,7 @@ export default function SettingsScreen() {
           <Ionicons name="trash" size={18} color="#ff6b6b" /><Text style={{ color: '#ff6b6b', fontSize: 15 }}>Clear All Data</Text>
         </TouchableOpacity>
       </View>
-      <Text style={{ color: '#333', textAlign: 'center', marginTop: 40, fontSize: 12 }}>Ghost Key Mobile - Local-First File Intelligence</Text>
+      <Text style={{ color: '#333', textAlign: 'center', marginTop: 40, fontSize: 12 }}>NeverSoft Services Mobile - Local-First File Intelligence</Text>
     </ScrollView>
   );
 }

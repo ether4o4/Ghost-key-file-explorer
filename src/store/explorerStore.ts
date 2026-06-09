@@ -1,5 +1,5 @@
 /**
- * Ghost Key — Explorer Store
+ * NeverSoft Services — Explorer Store
  *
  * Drives a Windows-style desktop: draggable / minimizeable / resizable windows,
  * each hosting a dual-pane file explorer. All filesystem work goes through the
@@ -35,7 +35,7 @@ export interface WindowState {
   z: number;
   minimized: boolean;
   maximized: boolean;
-  splitter: number; // left-pane fraction (0..1)
+  splitter: number; // top-pane fraction (0..1)
   panes: Record<Side, PaneState>;
   restore?: { x: number; y: number; w: number; h: number };
 }
@@ -235,12 +235,13 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const { nextId, zTop, windows } = get();
       const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
       const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-      const w = Math.min(1100, Math.max(720, Math.round(vw * 0.78)));
-      const h = Math.min(720, Math.max(440, Math.round(vh * 0.74)));
+      // Stacked top/bottom panes want a taller, narrower window than side-by-side did.
+      const w = Math.min(940, Math.max(600, Math.round(vw * 0.66)));
+      const h = Math.min(820, Math.max(520, Math.round(vh * 0.82)));
       const offset = (windows.length % 6) * 28;
       const win: WindowState = {
         id: nextId,
-        title: 'Ghost Explorer',
+        title: 'File Explorer',
         x: Math.max(12, Math.round((vw - w) / 2) + offset),
         y: Math.max(12, Math.round((vh - h) / 2) - 16 + offset),
         w,

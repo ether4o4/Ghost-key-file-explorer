@@ -8,7 +8,7 @@ export function getApiKey(): string { return apiKey; }
 
 export async function analyzeWithDeepSeek(
   prompt: string,
-  systemPrompt: string = 'You are Ghost Key AI, an intelligent file analysis assistant.'
+  systemPrompt: string = 'You are the NeverSoft Services AI, an intelligent file analysis assistant.'
 ): Promise<string> {
   if (!apiKey) return 'API key not configured. Set it in Settings.';
   try {
@@ -36,7 +36,7 @@ export async function chatWithDeepSeek(userMessage: string): Promise<string> {
   try {
     const history = await getChatHistory(20);
     const messages = [
-      { role: 'system', content: 'You are Ghost Key AI, an intelligent file analysis assistant.' }
+      { role: 'system', content: 'You are the NeverSoft Services AI, an intelligent file analysis assistant.' }
     ];
     for (const msg of history.reverse()) {
       messages.push({ role: msg.role, content: msg.content });

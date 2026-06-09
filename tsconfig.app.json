@@ -21,5 +21,8 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // React Native leftovers from the mobile experiment — they import react-native/expo
+  // packages that are not dependencies of this web app and nothing in the web graph uses them.
+  "exclude": ["src/screens", "src/services", "src/database"]
 }

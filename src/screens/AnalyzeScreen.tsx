@@ -48,7 +48,7 @@ export default function AnalyzeScreen() {
       <View style={styles.container}>
         <View style={styles.chatHeader}>
           <TouchableOpacity onPress={() => setChatMode(false)}><Ionicons name="arrow-back" size={24} color="#fff" /></TouchableOpacity>
-          <Text style={styles.chatTitle}>Ghost Key AI</Text>
+          <Text style={styles.chatTitle}>NeverSoft Services AI</Text>
           <View style={{ width: 24 }} />
         </View>
         <FlatList data={chatMessages} keyExtractor={(_, i) => i.toString()}
@@ -59,7 +59,7 @@ export default function AnalyzeScreen() {
             </View>
           )}
           ListEmptyComponent={
-            <View style={styles.empty}><Ionicons name="chatbubbles" size={48} color="#333" /><Text style={styles.emptyText}>Ask Ghost Key AI anything</Text></View>
+            <View style={styles.empty}><Ionicons name="chatbubbles" size={48} color="#333" /><Text style={styles.emptyText}>Ask NeverSoft Services AI anything</Text></View>
           }
         />
         {aiLoading && <View style={{ flexDirection: 'row', padding: 8, gap: 8 }}><ActivityIndicator size="small" color="#00d4ff" /><Text style={{ color: '#00d4ff' }}>Thinking...</Text></View>}

@@ -10,7 +10,7 @@ on:
       asset_name:
         description: APK asset name
         required: false
-        default: ghost-key-file-explorer.apk
+        default: neversoft-services-file-explorer.apk
   # Rolling release: every push that changes the app refreshes the APK asset on the
   # fixed `android-preview` tag, so the README download link always serves the latest
   # build. `main` keeps it current after merge; the feature branch keeps it current now.
@@ -71,7 +71,7 @@ jobs:
 
       - name: Stage APK
         env:
-          ASSET_NAME: ${{ github.event.inputs.asset_name || 'ghost-key-file-explorer.apk' }}
+          ASSET_NAME: ${{ github.event.inputs.asset_name || 'neversoft-services-file-explorer.apk' }}
         run: |
           mkdir -p dist
           cp android/app/build/outputs/apk/debug/app-debug.apk "dist/${ASSET_NAME}"
@@ -80,12 +80,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.inputs.release_tag || 'android-preview' }}
-          ASSET_NAME: ${{ github.event.inputs.asset_name || 'ghost-key-file-explorer.apk' }}
+          ASSET_NAME: ${{ github.event.inputs.asset_name || 'neversoft-services-file-explorer.apk' }}
         run: |
           if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             gh release create "${RELEASE_TAG}" \
-              --title "Ghost Key Android Preview" \
-              --notes "Stable installable debug APK for Ghost Key File Explorer." \
+              --title "NeverSoft Services Android Preview" \
+              --notes "Stable installable debug APK for NeverSoft Services File Explorer." \
               --prerelease
           fi
 

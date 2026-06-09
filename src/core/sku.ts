@@ -1,20 +1,20 @@
 /**
- * Ghost Key — SKU System
- * Files get IDs like GK-2026-05-0001 and magnetically cluster with related files.
+ * NeverSoft Services — SKU System
+ * Files get IDs like NS-2026-05-0001 and magnetically cluster with related files.
  */
 import { db } from './db';
 import type { GKFile, GKSKUCluster } from './db';
 
 let _counter = 0;
 
-/** Generate a new unique SKU: GK-YYYY-MM-XXXX */
+/** Generate a new unique SKU: NS-YYYY-MM-XXXX */
 export function generateSKU(date?: Date): string {
   const d = date ?? new Date();
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   _counter = (_counter + 1) % 10000;
   const seq = String(Math.floor(Math.random() * 9000) + 1000);
-  return `GK-${year}-${month}-${seq}`;
+  return `NS-${year}-${month}-${seq}`;
 }
 
 /** Link two SKUs together (creates/updates a cluster) */
@@ -103,7 +103,7 @@ export async function autoMagnetize(fileId: number): Promise<string[]> {
 
 /** Parse a SKU string for display */
 export function parseSKU(sku: string): { year: string; month: string; seq: string } | null {
-  const match = sku.match(/^GK-(\d{4})-(\d{2})-(\w+)$/);
+  const match = sku.match(/^(?:NS|GK)-(\d{4})-(\d{2})-(\w+)$/);
   if (!match) return null;
   return { year: match[1], month: match[2], seq: match[3] };
 }

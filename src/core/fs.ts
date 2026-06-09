@@ -1,5 +1,5 @@
 /**
- * Ghost Key — Real Filesystem Layer
+ * NeverSoft Services — Real Filesystem Layer
  *
  * One backend-agnostic interface, two implementations:
  *   • web    — File System Access API (Chrome/Edge desktop, dev preview)

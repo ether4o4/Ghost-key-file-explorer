@@ -1,7 +1,7 @@
 import { Desktop } from './components/explorer/Desktop';
 
 /**
- * Ghost Key — Dual-Pane File Explorer.
+ * NeverSoft Services — Dual-Pane File Explorer.
  *
  * A Windows-style desktop shell (draggable / minimizeable / resizable windows)
  * hosting a two-pane file manager with real read/write access to the filesystem

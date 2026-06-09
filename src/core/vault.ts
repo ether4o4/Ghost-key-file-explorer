@@ -1,5 +1,5 @@
 /**
- * Ghost Key — Vault System
+ * NeverSoft Services — Vault System
  * Encrypted containers using Web Crypto AES-GCM.
  * Types: standard | forensic | ephemeral (auto-wipe)
  */

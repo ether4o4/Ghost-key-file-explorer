@@ -1,4 +1,4 @@
-export interface GhostFile {
+export interface NeverSoftFile {
   id: string;
   name: string;
   path: string;

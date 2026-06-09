@@ -315,8 +315,8 @@ export const Homescreen: React.FC = () => {
       {/* Empty state */}
       {files.length === 0 && (
         <div className="text-center py-8 border-2 border-dashed border-ghost-border rounded-xl">
-          <div className="text-3xl mb-3">👻</div>
-          <p className="text-sm font-medium text-ghost-text">Welcome to Ghost Key</p>
+          <div className="text-3xl mb-3">💠</div>
+          <p className="text-sm font-medium text-ghost-text">Welcome to NeverSoft Services</p>
           <p className="text-xs text-ghost-muted mt-1 mb-4">
             Import files to start building your intelligence system
           </p>

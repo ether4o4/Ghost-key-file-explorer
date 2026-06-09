@@ -5,8 +5,8 @@ import { ExplorerPane } from './ExplorerPane';
 import { Icon } from './Icons';
 
 const TASKBAR_H = 48;
-const MIN_W = 420;
-const MIN_H = 280;
+const MIN_W = 360;
+const MIN_H = 420;
 
 // Only one window gesture (drag/resize/splitter) can be active at a time, so it
 // lives at module scope. This keeps the gesture handlers off React refs entirely.
@@ -23,7 +23,7 @@ type Gesture =
       ow: number;
       oh: number;
     }
-  | { mode: 'split'; winId: number; bodyLeft: number; bodyW: number };
+  | { mode: 'split'; winId: number; bodyTop: number; bodyH: number };
 
 let active: Gesture | null = null;
 
@@ -56,7 +56,7 @@ function onMove(e: PointerEvent) {
     }
     st.setBounds(g.winId, { x, y, w, h });
   } else {
-    st.setSplitter(g.winId, (e.clientX - g.bodyLeft) / g.bodyW);
+    st.setSplitter(g.winId, (e.clientY - g.bodyTop) / g.bodyH);
   }
 }
 
@@ -102,34 +102,30 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
     const body = e.currentTarget.parentElement;
     if (!body) return;
     const rect = body.getBoundingClientRect();
-    beginGesture({ mode: 'split', winId: win.id, bodyLeft: rect.left, bodyW: rect.width }, 'col-resize');
+    beginGesture({ mode: 'split', winId: win.id, bodyTop: rect.top, bodyH: rect.height }, 'row-resize');
   };
 
   const frameStyle: React.CSSProperties = win.maximized
     ? { left: 0, top: 0, width: '100%', height: '100%', zIndex: win.z }
     : { left: win.x, top: win.y, width: win.w, height: win.h, zIndex: win.z };
 
-  const leftPct = `${(win.splitter * 100).toFixed(2)}%`;
+  const topPct = `${(win.splitter * 100).toFixed(2)}%`;
 
   return (
     <div
-      className="absolute flex flex-col rounded-xl overflow-hidden border border-ghost-border bg-ghost-bg"
+      className="absolute flex flex-col rounded-lg overflow-hidden aero-glass"
       style={{ ...frameStyle, boxShadow: '0 24px 70px rgba(0,0,0,0.55)' }}
       onMouseDown={() => store().focusWindow(win.id)}
     >
-      {/* Title bar */}
+      {/* Title bar — Aero glass with top-down reflection */}
       <div
         onPointerDown={startMove}
         onDoubleClick={() => store().toggleMax(win.id)}
-        className="flex items-center gap-2 h-9 px-3 shrink-0 bg-ghost-surface border-b border-ghost-border cursor-default select-none"
+        className="aero-reflect flex items-center gap-2 h-9 px-3 shrink-0 bg-white/10 border-b border-white/30 cursor-default select-none"
       >
-        <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-ghost-accent" />
-          <span className="w-2.5 h-2.5 rounded-full bg-ghost-cyan/70" />
-          <span className="w-2.5 h-2.5 rounded-full bg-ghost-green/60" />
-        </div>
-        <span className="text-[12px] font-medium text-ghost-text tracking-wide ml-1">{win.title}</span>
-        <span className="text-[10px] text-ghost-muted ml-1 hidden sm:inline">— Ghost Key</span>
+        <Icon name="folderOpen" size={15} className="text-white/90 drop-shadow" />
+        <span className="text-[12px] font-medium text-white tracking-wide ml-1 [text-shadow:0_1px_2px_rgba(0,0,0,0.45)]">{win.title}</span>
+        <span className="text-[10px] text-white/75 ml-1 hidden sm:inline [text-shadow:0_1px_2px_rgba(0,0,0,0.4)]">— NeverSoft Services</span>
         <div className="flex-1" />
         <WinBtn title="Minimize" onClick={() => store().minimize(win.id)}>
           <Icon name="minus" size={14} />
@@ -142,18 +138,18 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
         </WinBtn>
       </div>
 
-      {/* Dual-pane body */}
-      <div className="flex-1 flex min-h-0">
-        <div style={{ width: leftPct }} className="min-w-0 border-r border-ghost-border">
+      {/* Dual-pane body — stacked top/bottom */}
+      <div className="flex-1 flex flex-col min-h-0 bg-ghost-bg/90">
+        <div style={{ height: topPct }} className="min-h-0 border-b border-ghost-border">
           <ExplorerPane winId={win.id} side="left" />
         </div>
         {/* Splitter */}
         <div
           onPointerDown={startSplit}
-          className="w-1.5 shrink-0 cursor-col-resize bg-ghost-border hover:bg-ghost-accent transition-colors"
+          className="h-1.5 w-full shrink-0 cursor-row-resize bg-white/20 hover:bg-white/45 transition-colors duration-hover"
           title="Drag to resize panes"
         />
-        <div style={{ width: `calc(100% - ${leftPct} - 6px)` }} className="min-w-0">
+        <div style={{ height: `calc(100% - ${topPct} - 6px)` }} className="min-h-0">
           <ExplorerPane winId={win.id} side="right" />
         </div>
       </div>
@@ -185,8 +181,8 @@ const WinBtn: React.FC<{
       e.stopPropagation();
       onClick();
     }}
-    className={`w-7 h-7 flex items-center justify-center rounded-md text-ghost-muted transition-colors ${
-      danger ? 'hover:bg-ghost-red hover:text-white' : 'hover:bg-ghost-card hover:text-ghost-text'
+    className={`w-7 h-7 flex items-center justify-center rounded-md text-white/80 transition-colors duration-hover active:duration-press ${
+      danger ? 'hover:bg-[#e81123] hover:text-white' : 'hover:bg-white/25 hover:text-white'
     }`}
   >
     {children}

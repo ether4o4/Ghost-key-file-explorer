@@ -1,5 +1,5 @@
 /**
- * Ghost Key — Local-First IndexedDB Schema (Dexie)
+ * NeverSoft Services — Local-First IndexedDB Schema (Dexie)
  * All data stays on device. No cloud required.
  */
 import Dexie, { type EntityTable } from 'dexie';
@@ -34,7 +34,7 @@ export type TimelineEventType =
 
 export interface GKFile {
   id?: number;
-  sku: string;           // GK-YYYY-MM-XXXX
+  sku: string;           // NS-YYYY-MM-XXXX
   name: string;
   ext: string;
   size: number;          // bytes
@@ -172,7 +172,7 @@ export interface SearchFilters {
 
 // ─── Database ────────────────────────────────────────────────────────────────
 
-export class GhostKeyDB extends Dexie {
+export class NeverSoftDB extends Dexie {
   files!: EntityTable<GKFile, 'id'>;
   skuClusters!: EntityTable<GKSKUCluster, 'id'>;
   timeline!: EntityTable<GKTimelineEvent, 'id'>;
@@ -183,6 +183,7 @@ export class GhostKeyDB extends Dexie {
   savedSearches!: EntityTable<GKSearchSave, 'id'>;
 
   constructor() {
+    // IndexedDB name predates the NeverSoft rebrand — kept so existing local data still opens.
     super('GhostKeyDB');
 
     this.version(1).stores({
@@ -198,4 +199,4 @@ export class GhostKeyDB extends Dexie {
   }
 }
 
-export const db = new GhostKeyDB();
+export const db = new NeverSoftDB();

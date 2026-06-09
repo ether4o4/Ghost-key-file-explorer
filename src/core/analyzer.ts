@@ -1,5 +1,5 @@
 /**
- * Ghost Key — Analysis Engine
+ * NeverSoft Services — Analysis Engine
  * Extracts entities, generates summaries, detects patterns.
  * Zero AI required — pure pattern matching + heuristics.
  */
