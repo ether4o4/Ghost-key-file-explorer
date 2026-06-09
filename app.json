@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Ghost Key Mobile",
-    "slug": "ghost-key-mobile",
+    "name": "NeverSoft Services",
+    "slug": "neversoft-services",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,10 +15,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ghostkey.mobile"
+      "bundleIdentifier": "com.neversoft.services"
     },
     "android": {
-      "package": "com.ghostkey.mobile",
+      "package": "com.neversoft.services",
       "adaptiveIcon": {
         "backgroundColor": "#0a0a0a"
       }
@@ -27,7 +27,7 @@
       [
         "expo-sqlite",
         {
-          "sqlitePath": "ghostkey.db"
+          "sqlitePath": "neversoft.db"
         }
       ]
     ]

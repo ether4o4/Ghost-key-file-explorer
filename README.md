@@ -1,18 +1,22 @@
-# 👻 Ghost Key — File Explorer
+# NeverSoft Services — File Explorer
 
-> A draggable, dual-pane file explorer — Windows Explorer ergonomics, Ghost Key aesthetic.
+> A draggable, dual-pane file explorer — Windows Vista Explorer ergonomics, NeverSoft Aero glass aesthetic.
 
 The app boots straight into a **desktop shell**: draggable / minimizeable / maximizeable / resizable
-windows, each hosting a **two-pane file manager** with real read/write access to the filesystem —
-**no root required**.
+Aero-glass windows, each hosting a **two-pane file manager** (stacked top/bottom) with real read/write
+access to the filesystem — **no root required**.
 
 ## 🗂 Explorer (default app)
 
-- **Dual panes** with a draggable splitter — copy/move between two folders side by side.
+- **Stacked dual panes** with a draggable splitter — copy/move between two folders, top and bottom.
+- **Pane independence** — actions in one pane (new folder, refresh, navigation) never move the other
+  pane; it stays in the folder it was showing.
 - **Drag & drop** entries between panes, into subfolders, or onto breadcrumbs. Hold **Ctrl/⌘** to copy
   (default action is move), just like Windows Explorer. Drop files in from your OS to import them.
 - **Real file operations**: new folder, rename (`F2`), delete (`Del`), open. List **and** grid views,
   sortable by name / size / modified / type.
+- **Vista Aero glass UI**: glass `rgba(255,255,255,.15–.25)`, 20–40px blur, highlight
+  `rgba(255,255,255,.3–.5)`, top-down reflection, 150/50/200ms interaction timings, 2s orb pulse.
 - **Full permissions, no root**:
   - **Web (Chrome / Edge):** the File System Access API grants per-folder read+write when you pick a
     folder — `Open Folder…`.
@@ -24,9 +28,9 @@ windows, each hosting a **two-pane file manager** with real read/write access to
 ### Get the Android APK
 
 - **CI artifact:** the **Build Android APK** workflow runs on every push/PR and uploads
-  `Ghost-Key-File-Explorer-installable-debug-apk`.
+  `NeverSoft-Services-installable-debug-apk`.
 - **Release asset:** run the **Publish Android APK** workflow (`workflow_dispatch`) to attach a stable
-  `ghost-key-file-explorer.apk` to the `android-preview` release.
+  `neversoft-services-file-explorer.apk` to the `android-preview` release.
 - **Local:** `npm run android:apk`.
 
 > ℹ️ The original file-intelligence engine (tagging, vaults, timeline, analysis) still lives in
@@ -42,7 +46,7 @@ windows, each hosting a **two-pane file manager** with real read/write access to
 - **Grid + List views** — Dual display modes with file type icons, previews, size, and tag badges
 
 ### 🧲 SKU / Magnetism System
-- Every file gets a unique ID: `GK-YYYY-MM-XXXX`
+- Every file gets a unique ID: `NS-YYYY-MM-XXXX`
 - Related files auto-cluster based on shared tags, source, and person
 - Manual SKU linking creates permanent relationships across files (messages ↔ images ↔ backups ↔ logs)
 
@@ -76,14 +80,14 @@ windows, each hosting a **two-pane file manager** with real read/write access to
 
 ## Android APK
 
-Ghost Key builds as an installable Android APK through Capacitor.
+NeverSoft Services builds as an installable Android APK through Capacitor.
 
 - Local build: `npm run android:apk`
-- GitHub build: open the **Build Android APK** workflow in GitHub Actions and download the `Ghost-Key-File-Explorer-installable-debug-apk` artifact.
+- GitHub build: open the **Build Android APK** workflow in GitHub Actions and download the `NeverSoft-Services-installable-debug-apk` artifact.
 - Android permissions declared: `READ_EXTERNAL_STORAGE` for Android 12 and older, `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, and `READ_MEDIA_AUDIO` for Android 13+, plus legacy write access for Android 9 and older.
 - The APK uses a debug signing key by default, which is installable for testing. A Play Store/release APK still needs a real release keystore.
 
-## 📱 UI — Android-style Dual Pane
+## 📱 UI — Stacked Dual Pane
 
 ### 🏠 Homescreen
 - Live stats bar (files indexed, events tracked, bundles, vaults)
@@ -157,6 +161,7 @@ src/
 ├── store/
 │   └── index.ts       # Zustand state management
 ├── components/
+│   ├── explorer/      # Desktop shell, Aero windows, stacked panes
 │   ├── layout/        # DualPane, LeftPane
 │   ├── files/         # FileCard, FilePane
 │   ├── homescreen/    # Homescreen, widgets
@@ -176,7 +181,7 @@ src/
 | Layer | Library |
 |---|---|
 | UI framework | React 19 + TypeScript |
-| Build tool | Vite 6 |
+| Build tool | Vite |
 | Styling | Tailwind CSS 3 |
 | Local DB | Dexie 4 (IndexedDB) |
 | State | Zustand |
@@ -196,25 +201,15 @@ src/
 
 ---
 
-## 🧬 What It Really Is
-
-Once everything connects:
-
-> This is no longer "file explorer". It becomes a **Data Intelligence System** — tracks behavior, links evidence, reconstructs timelines, surfaces patterns.
-
-Built to be the entry point for a full data intelligence workflow.
-
----
-
 ## 📲 Download the latest Android APK
 
 This link always points to the **newest build** — every push to the app refreshes it automatically
 (via the *Publish Android APK* workflow → `android-preview` release):
 
-### 👉 **[Download Ghost Key — latest APK](https://github.com/ether4o4/Ghost-key-file-explorer/releases/download/android-preview/ghost-key-file-explorer.apk)**
+### 👉 **[Download NeverSoft Services — latest APK](https://github.com/ether4o4/Ghost-key-file-explorer/releases/download/android-preview/neversoft-services-file-explorer.apk)**
 
 ```
-https://github.com/ether4o4/Ghost-key-file-explorer/releases/download/android-preview/ghost-key-file-explorer.apk
+https://github.com/ether4o4/Ghost-key-file-explorer/releases/download/android-preview/neversoft-services-file-explorer.apk
 ```
 
 > Debug-signed and installable (enable "Install unknown apps" for your browser/file manager).

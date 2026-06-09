@@ -4,7 +4,7 @@ let db: SQLite.SQLiteDatabase | null = null;
 
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (db) return db;
-  db = await SQLite.openDatabaseAsync('ghostkey.db');
+  db = await SQLite.openDatabaseAsync('neversoft.db');
   await initTables();
   return db;
 }

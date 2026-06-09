@@ -1,5 +1,5 @@
 /**
- * Ghost Key — Seed / Demo Data
+ * NeverSoft Services — Seed / Demo Data
  * Populates the app with realistic sample data on first launch.
  * Only runs if the database is empty.
  */
@@ -8,7 +8,7 @@ import type { GKFile } from './db';
 
 const DEMO_FILES: Array<Omit<GKFile, 'id'>> = [
   {
-    sku: 'GK-2026-03-1042',
+    sku: 'NS-2026-03-1042',
     name: 'Sarah_Johnson_profile.jpg',
     ext: 'jpg',
     size: 2_415_919,
@@ -19,7 +19,7 @@ const DEMO_FILES: Array<Omit<GKFile, 'id'>> = [
       { dimension: 'when', value: 'Mar 2026' },
       { dimension: 'where', value: 'Instagram' },
     ],
-    skuLinks: ['GK-2026-03-2088', 'GK-2026-04-5531'],
+    skuLinks: ['NS-2026-03-2088', 'NS-2026-04-5531'],
     bundleIds: [],
     source: 'Instagram',
     content: undefined,
@@ -30,7 +30,7 @@ const DEMO_FILES: Array<Omit<GKFile, 'id'>> = [
     isPinned: true,
   },
   {
-    sku: 'GK-2026-03-2088',
+    sku: 'NS-2026-03-2088',
     name: 'snapchat_export_march.zip',
     ext: 'zip',
     size: 14_891_520,
@@ -41,7 +41,7 @@ const DEMO_FILES: Array<Omit<GKFile, 'id'>> = [
       { dimension: 'when', value: 'Mar 2026' },
       { dimension: 'where', value: 'Snapchat' },
     ],
-    skuLinks: ['GK-2026-03-1042'],
+    skuLinks: ['NS-2026-03-1042'],
     bundleIds: [],
     source: 'Snapchat',
     content: undefined,
@@ -52,7 +52,7 @@ const DEMO_FILES: Array<Omit<GKFile, 'id'>> = [
     isPinned: false,
   },
   {
-    sku: 'GK-2026-04-5531',
+    sku: 'NS-2026-04-5531',
     name: 'icloud_backup_2026-04.db',
     ext: 'db',
     size: 52_428_800,
@@ -63,7 +63,7 @@ const DEMO_FILES: Array<Omit<GKFile, 'id'>> = [
       { dimension: 'when', value: 'Apr 2026' },
       { dimension: 'where', value: 'iCloud' },
     ],
-    skuLinks: ['GK-2026-03-1042'],
+    skuLinks: ['NS-2026-03-1042'],
     bundleIds: [],
     source: 'iCloud',
     content: `Sarah Johnson
@@ -100,7 +100,7 @@ Apps: WhatsApp, Snapchat, Instagram, Signal`,
     },
   },
   {
-    sku: 'GK-2026-04-7712',
+    sku: 'NS-2026-04-7712',
     name: 'chat_log_whatsapp_2026.txt',
     ext: 'txt',
     size: 89_344,
@@ -127,7 +127,7 @@ Email: marcus.r@proton.me`,
     isPinned: false,
   },
   {
-    sku: 'GK-2026-05-0091',
+    sku: 'NS-2026-05-0091',
     name: 'case_notes_may.md',
     ext: 'md',
     size: 4_096,
@@ -163,7 +163,7 @@ Snapchat, Instagram, iCloud, WhatsApp`,
     isPinned: true,
   },
   {
-    sku: 'GK-2026-02-3390',
+    sku: 'NS-2026-02-3390',
     name: 'device_backup_samsung.tar.gz',
     ext: 'gz',
     size: 104_857_600,
@@ -186,20 +186,20 @@ Snapchat, Instagram, iCloud, WhatsApp`,
 ];
 
 const DEMO_TIMELINE_EVENTS = [
-  { type: 'file_imported' as const, desc: '"icloud_backup_2026-04.db" imported from iCloud', sku: 'GK-2026-04-5531', ago: 1 * 24 * 60 * 60 * 1000 },
-  { type: 'file_analyzed' as const, desc: '"icloud_backup_2026-04.db" analyzed — risk 3.5/10', sku: 'GK-2026-04-5531', ago: 23 * 60 * 60 * 1000 },
-  { type: 'file_imported' as const, desc: '"chat_log_whatsapp_2026.txt" imported from WhatsApp', sku: 'GK-2026-04-7712', ago: 22 * 60 * 60 * 1000 },
-  { type: 'file_tagged' as const, desc: 'Tags updated on "sarah_johnson_profile.jpg"', sku: 'GK-2026-03-1042', ago: 20 * 60 * 60 * 1000 },
-  { type: 'sku_linked' as const, desc: 'SKU GK-2026-03-1042 linked to GK-2026-03-2088', sku: undefined, ago: 18 * 60 * 60 * 1000 },
+  { type: 'file_imported' as const, desc: '"icloud_backup_2026-04.db" imported from iCloud', sku: 'NS-2026-04-5531', ago: 1 * 24 * 60 * 60 * 1000 },
+  { type: 'file_analyzed' as const, desc: '"icloud_backup_2026-04.db" analyzed — risk 3.5/10', sku: 'NS-2026-04-5531', ago: 23 * 60 * 60 * 1000 },
+  { type: 'file_imported' as const, desc: '"chat_log_whatsapp_2026.txt" imported from WhatsApp', sku: 'NS-2026-04-7712', ago: 22 * 60 * 60 * 1000 },
+  { type: 'file_tagged' as const, desc: 'Tags updated on "sarah_johnson_profile.jpg"', sku: 'NS-2026-03-1042', ago: 20 * 60 * 60 * 1000 },
+  { type: 'sku_linked' as const, desc: 'SKU NS-2026-03-1042 linked to NS-2026-03-2088', sku: undefined, ago: 18 * 60 * 60 * 1000 },
   { type: 'bundle_created' as const, desc: 'Bundle "Sarah Johnson — Case Bundle" created with 4 files', sku: undefined, ago: 15 * 60 * 60 * 1000 },
   { type: 'vault_created' as const, desc: 'Vault "Evidence Vault" created (forensic)', sku: undefined, ago: 12 * 60 * 60 * 1000 },
   { type: 'limbo_opened' as const, desc: 'Limbo session "Snapchat Archive Inspection" opened with 1 file(s)', sku: undefined, ago: 10 * 60 * 60 * 1000 },
-  { type: 'file_analyzed' as const, desc: '"snapchat_export_march.zip" analyzed — risk 6.2/10', sku: 'GK-2026-03-2088', ago: 9 * 60 * 60 * 1000 },
+  { type: 'file_analyzed' as const, desc: '"snapchat_export_march.zip" analyzed — risk 6.2/10', sku: 'NS-2026-03-2088', ago: 9 * 60 * 60 * 1000 },
   { type: 'limbo_released' as const, desc: 'Limbo session "Snapchat Archive Inspection" released', sku: undefined, ago: 8 * 60 * 60 * 1000 },
-  { type: 'file_imported' as const, desc: '"case_notes_may.md" imported from Desktop', sku: 'GK-2026-05-0091', ago: 4 * 60 * 60 * 1000 },
+  { type: 'file_imported' as const, desc: '"case_notes_may.md" imported from Desktop', sku: 'NS-2026-05-0091', ago: 4 * 60 * 60 * 1000 },
   { type: 'search_performed' as const, desc: 'Search: "Sarah + Snapchat"', sku: undefined, ago: 3 * 60 * 60 * 1000 },
   { type: 'widget_pinned' as const, desc: 'Bundle "Sarah Johnson — Case Bundle" pinned to homescreen', sku: undefined, ago: 2 * 60 * 60 * 1000 },
-  { type: 'file_opened' as const, desc: '"icloud_backup_2026-04.db" opened', sku: 'GK-2026-04-5531', ago: 1 * 60 * 60 * 1000 },
+  { type: 'file_opened' as const, desc: '"icloud_backup_2026-04.db" opened', sku: 'NS-2026-04-5531', ago: 1 * 60 * 60 * 1000 },
   { type: 'search_performed' as const, desc: 'Search: "Marcus + WhatsApp + April"', sku: undefined, ago: 30 * 60 * 1000 },
 ];
 
@@ -279,8 +279,8 @@ export async function seedDemoData(): Promise<void> {
 
   // Create SKU cluster
   await db.skuClusters.add({
-    rootSku: 'GK-2026-03-1042',
-    memberSkus: ['GK-2026-03-1042', 'GK-2026-03-2088', 'GK-2026-04-5531'],
+    rootSku: 'NS-2026-03-1042',
+    memberSkus: ['NS-2026-03-1042', 'NS-2026-03-2088', 'NS-2026-04-5531'],
     label: 'Sarah Johnson cluster',
     createdAt: now - 18 * 60 * 60 * 1000,
   });

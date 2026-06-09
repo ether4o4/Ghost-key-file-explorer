@@ -28,13 +28,23 @@ export default {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
+      transitionDuration: {
+        hover: '150ms',
+        press: '50ms',
+        open: '200ms',
+      },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'slide-in': 'slideIn 0.3s ease-out',
         'fade-in': 'fadeIn 0.2s ease-out',
         'glow': 'glow 2s ease-in-out infinite alternate',
+        'aero-pulse': 'aeroPulse 2s ease-in-out infinite',
       },
       keyframes: {
+        aeroPulse: {
+          '0%, 100%': { boxShadow: '0 0 6px rgba(125,210,255,0.35)' },
+          '50%': { boxShadow: '0 0 18px rgba(125,210,255,0.85)' },
+        },
         slideIn: {
           '0%': { transform: 'translateX(-100%)', opacity: '0' },
           '100%': { transform: 'translateX(0)', opacity: '1' },

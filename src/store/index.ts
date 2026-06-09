@@ -1,5 +1,5 @@
 /**
- * Ghost Key — Zustand Store
+ * NeverSoft Services — Zustand Store
  * Central state management connecting all core engine modules.
  */
 import { create } from 'zustand';

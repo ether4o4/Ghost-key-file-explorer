@@ -114,9 +114,9 @@ export const LeftPane: React.FC = () => {
       {/* App header */}
       <div className="px-4 py-4 border-b border-ghost-border">
         <div className="flex items-center gap-2">
-          <span className="text-xl">👻</span>
+          <span className="text-xl">💠</span>
           <div>
-            <div className="text-sm font-bold text-ghost-text">Ghost Key</div>
+            <div className="text-sm font-bold text-ghost-text">NeverSoft Services</div>
             <div className="text-[9px] text-ghost-muted">File Intelligence</div>
           </div>
         </div>

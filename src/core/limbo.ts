@@ -1,5 +1,5 @@
 /**
- * Ghost Key — Limbo Sandbox
+ * NeverSoft Services — Limbo Sandbox
  * Isolated inspection environment. Files analyzed without touching real system.
  */
 import { db } from './db';

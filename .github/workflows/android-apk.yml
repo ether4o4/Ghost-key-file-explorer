@@ -47,5 +47,5 @@ jobs:
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
-          name: Ghost-Key-File-Explorer-installable-debug-apk
+          name: NeverSoft-Services-installable-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk

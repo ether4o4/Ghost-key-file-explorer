@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Ghost Key File Explorer</string>
-    <string name="title_activity_main">Ghost Key File Explorer</string>
+    <string name="app_name">NeverSoft Services</string>
+    <string name="title_activity_main">NeverSoft Services</string>
     <string name="package_name">com.ether4o4.ghostkeyfileexplorer</string>
     <string name="custom_url_scheme">com.ether4o4.ghostkeyfileexplorer</string>
 </resources>

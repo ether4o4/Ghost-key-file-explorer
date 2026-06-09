@@ -13,15 +13,13 @@ export const Desktop: React.FC = () => {
   }, [init]);
 
   return (
-    <div className="fixed inset-0 gk-desktop overflow-hidden select-none">
-      <div className="absolute inset-0 gk-grid-overlay pointer-events-none opacity-60" />
-
+    <div className="fixed inset-0 ns-desktop overflow-hidden select-none">
       {/* Brand watermark */}
       <div className="absolute top-6 left-6 pointer-events-none">
-        <div className="text-2xl font-bold tracking-tight text-ghost-text/90">
-          👻 Ghost <span className="text-ghost-accent">Explorer</span>
+        <div className="text-2xl font-bold tracking-tight text-white/95 [text-shadow:0_1px_3px_rgba(0,0,0,0.45)]">
+          NeverSoft <span className="text-sky-200">Services</span>
         </div>
-        <div className="text-[11px] text-ghost-muted mt-0.5 font-mono">dual-pane · drag &amp; drop · no indexing</div>
+        <div className="text-[11px] text-white/70 mt-0.5 [text-shadow:0_1px_2px_rgba(0,0,0,0.4)]">File Explorer</div>
       </div>
 
       {/* Windows layer (above wallpaper, below taskbar) */}
@@ -33,9 +31,9 @@ export const Desktop: React.FC = () => {
           <div className="absolute inset-0 flex items-center justify-center">
             <button
               onClick={() => useExplorer.getState().newWindow()}
-              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-ghost-accent/15 border border-ghost-accent/40 text-ghost-text hover:bg-ghost-accent/25 transition-colors"
+              className="aero-glass aero-reflect animate-aero-pulse flex items-center gap-2 px-5 py-3 rounded-xl text-white hover:bg-white/25 transition-colors duration-hover [text-shadow:0_1px_2px_rgba(0,0,0,0.4)]"
             >
-              <Icon name="folderOpen" size={20} className="text-ghost-accent" />
+              <Icon name="folderOpen" size={20} className="text-white" />
               Open Explorer Window
             </button>
           </div>
@@ -79,17 +77,17 @@ const Taskbar: React.FC = () => {
   };
 
   return (
-    <div className="absolute bottom-0 inset-x-0 h-12 flex items-center gap-2 px-2 bg-ghost-surface/85 backdrop-blur border-t border-ghost-border z-50">
+    <div className="aero-glass aero-reflect absolute bottom-0 inset-x-0 h-12 flex items-center gap-2 px-2 border-t border-white/35 z-50">
       <button
         onClick={() => useExplorer.getState().newWindow()}
         title="New window"
-        className="flex items-center gap-1.5 px-3 h-9 rounded-lg bg-ghost-accent/20 border border-ghost-accent/40 text-ghost-text hover:bg-ghost-accent/30 transition-colors shrink-0"
+        className="animate-aero-pulse flex items-center gap-1.5 px-3 h-9 rounded-full bg-white/15 border border-white/40 text-white hover:bg-white/30 transition-colors duration-hover active:duration-press shrink-0 [text-shadow:0_1px_2px_rgba(0,0,0,0.4)]"
       >
-        <Icon name="plus" size={15} className="text-ghost-accent" />
+        <Icon name="plus" size={15} className="text-white" />
         <span className="text-[12px] font-medium hidden sm:inline">New Window</span>
       </button>
 
-      <div className="w-px h-6 bg-ghost-border" />
+      <div className="w-px h-6 bg-white/30" />
 
       <div className="flex items-center gap-1.5 flex-1 overflow-x-auto no-scrollbar">
         {windows.map((w) => {
@@ -99,22 +97,22 @@ const Taskbar: React.FC = () => {
               key={w.id}
               onClick={() => onTaskClick(w.id, w.minimized, focused)}
               title={w.title}
-              className={`flex items-center gap-2 px-3 h-9 rounded-lg border transition-colors shrink-0 max-w-[200px] ${
+              className={`flex items-center gap-2 px-3 h-9 rounded-lg border transition-colors duration-hover shrink-0 max-w-[200px] [text-shadow:0_1px_2px_rgba(0,0,0,0.4)] ${
                 focused
-                  ? 'bg-ghost-card border-ghost-accent/50 text-ghost-text'
+                  ? 'bg-white/30 border-white/55 text-white'
                   : w.minimized
-                    ? 'bg-transparent border-ghost-border/60 text-ghost-muted'
-                    : 'bg-ghost-card/50 border-ghost-border text-ghost-text/90 hover:bg-ghost-card'
+                    ? 'bg-transparent border-white/20 text-white/55'
+                    : 'bg-white/10 border-white/30 text-white/90 hover:bg-white/20'
               }`}
             >
-              <Icon name="folderOpen" size={14} className={focused ? 'text-ghost-accent' : 'text-ghost-muted'} />
+              <Icon name="folderOpen" size={14} className={focused ? 'text-white' : 'text-white/65'} />
               <span className="text-[12px] truncate">{w.title}</span>
             </button>
           );
         })}
       </div>
 
-      <div className="text-[11px] text-ghost-muted font-mono px-2 shrink-0">
+      <div className="text-[11px] text-white/85 font-mono px-2 shrink-0 [text-shadow:0_1px_2px_rgba(0,0,0,0.4)]">
         {clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </div>
     </div>

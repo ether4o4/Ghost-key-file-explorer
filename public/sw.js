@@ -1,14 +1,14 @@
 /**
- * Ghost Key — Service Worker
+ * NeverSoft Services — Service Worker
  * Offline-first caching for PWA installable experience.
  * Cache strategy: Cache-First for static assets, Network-First for API/data.
  */
-const CACHE_NAME = 'ghost-key-v1';
+const CACHE_NAME = 'neversoft-services-v1';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/ghost.svg',
+  '/neversoft.svg',
   '/favicon.svg',
   '/icons.svg',
 ];

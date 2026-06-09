@@ -132,7 +132,7 @@ export const MobileLayout: React.FC = () => {
           className="flex items-center gap-2 text-ghost-text hover:text-ghost-accent transition-colors"
         >
           <Menu size={20} />
-          <span className="text-sm font-bold">Ghost Key</span>
+          <span className="text-sm font-bold">NeverSoft Services</span>
         </button>
       </div>
 

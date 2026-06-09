@@ -29,16 +29,16 @@ interface ExplorerLocation {
 }
 
 const LOCATIONS: ExplorerLocation[] = [
-  { id: 'all', label: 'All Files', path: 'GhostKey:/', icon: <HardDrive size={14} />, kind: 'all' },
-  { id: 'inbox', label: 'Inbox', path: 'GhostKey:/Inbox', icon: <Inbox size={14} />, kind: 'source', source: 'Inbox' },
-  { id: 'downloads', label: 'Downloads', path: 'GhostKey:/Downloads', icon: <Download size={14} />, kind: 'source', source: 'Downloads' },
-  { id: 'desktop', label: 'Desktop', path: 'GhostKey:/Desktop', icon: <Home size={14} />, kind: 'source', source: 'Desktop' },
+  { id: 'all', label: 'All Files', path: 'NeverSoft:/', icon: <HardDrive size={14} />, kind: 'all' },
+  { id: 'inbox', label: 'Inbox', path: 'NeverSoft:/Inbox', icon: <Inbox size={14} />, kind: 'source', source: 'Inbox' },
+  { id: 'downloads', label: 'Downloads', path: 'NeverSoft:/Downloads', icon: <Download size={14} />, kind: 'source', source: 'Downloads' },
+  { id: 'desktop', label: 'Desktop', path: 'NeverSoft:/Desktop', icon: <Home size={14} />, kind: 'source', source: 'Desktop' },
   { id: 'android-docs', label: 'Android Docs', path: 'Android:/Documents', icon: <FolderInput size={14} />, kind: 'source', source: 'Android Documents' },
-  { id: 'images', label: 'Images', path: 'GhostKey:/Media/Images', icon: <Folder size={14} />, kind: 'category', exts: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic'] },
-  { id: 'documents', label: 'Documents', path: 'GhostKey:/Documents', icon: <Folder size={14} />, kind: 'category', exts: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf'] },
-  { id: 'code', label: 'Code', path: 'GhostKey:/Code', icon: <Folder size={14} />, kind: 'category', exts: ['js', 'ts', 'tsx', 'jsx', 'py', 'json', 'html', 'css'] },
-  { id: 'vault', label: 'Vault', path: 'GhostKey:/Vault', icon: <Lock size={14} />, kind: 'vault' },
-  { id: 'limbo', label: 'Limbo', path: 'GhostKey:/Limbo', icon: <Shield size={14} />, kind: 'limbo' },
+  { id: 'images', label: 'Images', path: 'NeverSoft:/Media/Images', icon: <Folder size={14} />, kind: 'category', exts: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'heic'] },
+  { id: 'documents', label: 'Documents', path: 'NeverSoft:/Documents', icon: <Folder size={14} />, kind: 'category', exts: ['pdf', 'doc', 'docx', 'txt', 'md', 'rtf'] },
+  { id: 'code', label: 'Code', path: 'NeverSoft:/Code', icon: <Folder size={14} />, kind: 'category', exts: ['js', 'ts', 'tsx', 'jsx', 'py', 'json', 'html', 'css'] },
+  { id: 'vault', label: 'Vault', path: 'NeverSoft:/Vault', icon: <Lock size={14} />, kind: 'vault' },
+  { id: 'limbo', label: 'Limbo', path: 'NeverSoft:/Limbo', icon: <Shield size={14} />, kind: 'limbo' },
 ];
 
 const SORTERS = [
@@ -163,7 +163,7 @@ const FileTable: React.FC<{
       <span>Size</span>
       <span>Type</span>
       <span>Modified</span>
-      <span>Ghost Tags</span>
+      <span>Smart Tags</span>
     </div>
     {files.map(file => {
       const id = file.id!;
@@ -564,7 +564,7 @@ export const FilePane: React.FC = () => {
             <KeyRound size={17} />
           </div>
           <div>
-            <div className="text-sm font-bold leading-tight">Ghost Key File Explorer</div>
+            <div className="text-sm font-bold leading-tight">NeverSoft Services File Explorer</div>
             <div className="text-[9px] text-ghost-muted">dual-pane release workspace</div>
           </div>
         </div>

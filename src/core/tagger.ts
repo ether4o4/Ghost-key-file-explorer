@@ -1,5 +1,5 @@
 /**
- * Ghost Key — Auto-Tagger
+ * NeverSoft Services — Auto-Tagger
  * Extracts who/what/when/where from file metadata and content.
  */
 import type { GKTag } from './db';
