@@ -21,7 +21,7 @@ export const Desktop: React.FC = () => {
         <div className="text-2xl font-bold tracking-tight text-ghost-text/90">
           👻 Ghost <span className="text-ghost-accent">Explorer</span>
         </div>
-        <div className="text-[11px] text-ghost-muted mt-0.5 font-mono">dual-pane · drag &amp; drop · no indexing</div>
+        <div className="text-[11px] text-ghost-muted mt-0.5 font-mono">staging workspace · pick up to 5 folders · no indexing</div>
       </div>
 
       {/* Windows layer (above wallpaper, below taskbar) */}

@@ -37,6 +37,12 @@ export interface WindowState {
   maximized: boolean;
   collapsed: Side | null; // a pane minimized to a rail (the OTHER pane fills the window)
   splitter: number; // first-pane fraction (0..1): left when side-by-side, top when stacked
+  // ── Staging workspace ──
+  // The window is a two-deck staging view: the BOTTOM deck (panes.right) is a
+  // folders-only browser used to pick up to five working folders; the TOP deck
+  // (panes.left) shows the files of whichever staged folder is active.
+  staged: DirRef[]; // picked working folders (max 5), in pick order
+  activeStaged: number | null; // index into `staged` whose files fill the top deck
   panes: Record<Side, PaneState>;
   restore?: { x: number; y: number; w: number; h: number };
 }
@@ -157,7 +163,16 @@ interface ExplorerStore {
   // Touch-friendly move/copy: send the current selection to the other pane's
   // folder without any drag gesture (drag-and-drop is mouse-only on Android).
   sendSelection: (id: number, side: Side, copy: boolean) => Promise<void>;
+
+  // ── Staging workspace ──
+  stageFolder: (id: number, entry: DirEntry) => Promise<void>; // pick a folder → tray + active
+  activateStaged: (id: number, idx: number) => Promise<void>; // make a staged folder active
+  unstageFolder: (id: number, idx: number) => void; // drop a folder from the tray
+  moveTopSelectionTo: (id: number, targetIdx: number, copy: boolean) => Promise<void>; // top files → staged folder
 }
+
+// Maximum number of folders that can be staged to work in at once.
+export const MAX_STAGED = 5;
 
 export const useExplorer = create<ExplorerStore>((set, get) => {
   // ── internal helpers ──
@@ -246,7 +261,7 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const offset = (windows.length % 6) * 28;
       const win: WindowState = {
         id: nextId,
-        title: 'Ghost Explorer',
+        title: 'Ghost Staging',
         x: Math.max(12, Math.round((vw - w) / 2) + offset),
         y: Math.max(12, Math.round((vh - h) / 2) - 16 + offset),
         w,
@@ -256,6 +271,8 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         maximized: vw < 760, // phones: start maximized
         collapsed: null,
         splitter: 0.5,
+        staged: [],
+        activeStaged: null,
         panes: { left: emptyPane(), right: emptyPane() },
       };
       set({ windows: [...windows, win], nextId: nextId + 1, zTop: zTop + 1 });
@@ -482,6 +499,83 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         }
       } catch (e) {
         get().notify(e instanceof Error ? e.message : 'Import failed', 'error');
+      }
+    },
+
+    // ── Staging workspace ──
+    // Pick a folder from the bottom browser: add it to the tray (max 5, no
+    // duplicates) and make it active so its files fill the top deck.
+    stageFolder: async (id, entry) => {
+      if (entry.kind !== 'directory') return;
+      const win = get().windows.find((w) => w.id === id);
+      if (!win) return;
+      const ref = get().adapter.enter(entry);
+      let idx = win.staged.findIndex((r) => sameDir(r, ref));
+      if (idx < 0) {
+        if (win.staged.length >= MAX_STAGED) {
+          get().notify(`You can stage up to ${MAX_STAGED} folders — remove one first`, 'info');
+          return;
+        }
+        const staged = [...win.staged, ref];
+        idx = staged.length - 1;
+        patchWindow(id, (w) => ({ ...w, staged }));
+      }
+      patchWindow(id, (w) => ({ ...w, activeStaged: idx }));
+      await loadInto(id, 'left', [ref]);
+    },
+
+    activateStaged: async (id, idx) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win || idx < 0 || idx >= win.staged.length) return;
+      patchWindow(id, (w) => ({ ...w, activeStaged: idx }));
+      await loadInto(id, 'left', [win.staged[idx]]);
+    },
+
+    unstageFolder: (id, idx) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win || idx < 0 || idx >= win.staged.length) return;
+      const staged = win.staged.filter((_, i) => i !== idx);
+      let activeStaged = win.activeStaged;
+      const clearedActive = activeStaged === idx;
+      if (clearedActive) activeStaged = null;
+      else if (activeStaged !== null && activeStaged > idx) activeStaged -= 1;
+      patchWindow(id, (w) => ({ ...w, staged, activeStaged }));
+      // If we removed the folder currently shown up top, blank the top deck.
+      if (clearedActive) {
+        patchPane(id, 'left', { stack: [], entries: [], selected: [], error: null });
+      }
+    },
+
+    // Move/copy the files selected in the top deck into another staged folder.
+    moveTopSelectionTo: async (id, targetIdx, copy) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win) return;
+      const srcDir = currentDir(id, 'left');
+      const srcPane = getPane(id, 'left');
+      const destDir = win.staged[targetIdx];
+      if (!srcDir || !srcPane || !destDir) return;
+      if (sameDir(srcDir, destDir)) {
+        get().notify('That folder is already open above', 'info');
+        return;
+      }
+      const targets = srcPane.entries.filter(
+        (e) => e.kind === 'file' && srcPane.selected.includes(e.name),
+      );
+      if (targets.length === 0) return;
+      const mode = copy ? 'copy' : 'move';
+      let done = 0;
+      try {
+        for (const entry of targets) {
+          await get().adapter.transfer(srcDir, entry, destDir, mode);
+          done++;
+        }
+        if (done > 0) {
+          get().notify(`${copy ? 'Copied' : 'Moved'} ${done} file${done === 1 ? '' : 's'} → ${destDir.name}`, 'success');
+        }
+      } catch (e) {
+        get().notify(e instanceof Error ? e.message : 'Transfer failed', 'error');
+      } finally {
+        await get().refresh(id, 'left');
       }
     },
 

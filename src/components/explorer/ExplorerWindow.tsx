@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useExplorer, getDrag } from '../../store/explorerStore';
-import type { Side, WindowState } from '../../store/explorerStore';
-import { ExplorerPane } from './ExplorerPane';
+import React, { useRef } from 'react';
+import { useExplorer } from '../../store/explorerStore';
+import type { WindowState } from '../../store/explorerStore';
+import { StagedFilesPane } from './StagedFilesPane';
+import { FolderStagingPane } from './FolderStagingPane';
 import { Icon } from './Icons';
 
 const TASKBAR_H = 48;
@@ -23,7 +24,7 @@ type Gesture =
       ow: number;
       oh: number;
     }
-  | { mode: 'split'; winId: number; vertical: boolean; bodyStart: number; bodySize: number };
+  | { mode: 'split'; winId: number; bodyTop: number; bodyH: number };
 
 let active: Gesture | null = null;
 
@@ -56,9 +57,8 @@ function onMove(e: PointerEvent) {
     }
     st.setBounds(g.winId, { x, y, w, h });
   } else {
-    // Splitter — measure along the active axis (vertical = stacked top/bottom).
-    const pos = g.vertical ? e.clientY - g.bodyStart : e.clientX - g.bodyStart;
-    st.setSplitter(g.winId, pos / g.bodySize);
+    // Splitter — the decks always stack top/bottom, so measure vertically.
+    st.setSplitter(g.winId, (e.clientY - g.bodyTop) / g.bodyH);
   }
 }
 
@@ -66,6 +66,7 @@ function endGesture() {
   active = null;
   window.removeEventListener('pointermove', onMove);
   window.removeEventListener('pointerup', endGesture);
+  window.removeEventListener('pointercancel', endGesture);
   document.body.style.userSelect = '';
   document.body.style.cursor = '';
 }
@@ -76,30 +77,12 @@ function beginGesture(g: Gesture, cursor?: string) {
   if (cursor) document.body.style.cursor = cursor;
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', endGesture);
+  window.addEventListener('pointercancel', endGesture);
 }
 
 export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
   const store = useExplorer.getState;
   const bodyRef = useRef<HTMLDivElement>(null);
-  // Orientation follows the window body's shape: taller than wide → stack the
-  // panes top/bottom (portrait), otherwise side-by-side. Measured live so it
-  // adapts to phone rotation, maximize and manual resize alike.
-  const [vertical, setVertical] = useState(
-    () => (typeof window !== 'undefined' ? window.innerHeight >= window.innerWidth : false),
-  );
-
-  useEffect(() => {
-    const el = bodyRef.current;
-    if (!el) return;
-    const measure = () => {
-      const r = el.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0) setVertical(r.height >= r.width);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [win.minimized, win.maximized]);
 
   if (win.minimized) return null;
 
@@ -124,71 +107,14 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
     const body = bodyRef.current;
     if (!body) return;
     const rect = body.getBoundingClientRect();
-    beginGesture(
-      {
-        mode: 'split',
-        winId: win.id,
-        vertical,
-        bodyStart: vertical ? rect.top : rect.left,
-        bodySize: vertical ? rect.height : rect.width,
-      },
-      vertical ? 'row-resize' : 'col-resize',
-    );
+    beginGesture({ mode: 'split', winId: win.id, bodyTop: rect.top, bodyH: rect.height }, 'row-resize');
   };
 
   const frameStyle: React.CSSProperties = win.maximized
     ? { left: 0, top: 0, width: '100%', height: '100%', zIndex: win.z }
     : { left: win.x, top: win.y, width: win.w, height: win.h, zIndex: win.z };
 
-  const firstPct = `${(win.splitter * 100).toFixed(2)}%`;
-  const collapsed = win.collapsed;
-
-  const paneBox = (side: Side, fill: boolean) => (
-    <div
-      style={fill ? undefined : { flexBasis: firstPct }}
-      className={`min-w-0 min-h-0 overflow-hidden ${fill ? 'flex-1' : 'shrink-0 grow-0'}`}
-    >
-      <ExplorerPane winId={win.id} side={side} />
-    </div>
-  );
-
-  let body: React.ReactNode;
-  if (collapsed === 'left') {
-    body = (
-      <>
-        <PaneRail win={win} side="left" vertical={vertical} />
-        {paneBox('right', true)}
-      </>
-    );
-  } else if (collapsed === 'right') {
-    body = (
-      <>
-        {paneBox('left', true)}
-        <PaneRail win={win} side="right" vertical={vertical} />
-      </>
-    );
-  } else {
-    body = (
-      <>
-        {paneBox('left', false)}
-        <div
-          onPointerDown={startSplit}
-          onDoubleClick={() => store().setSplitter(win.id, 0.5)}
-          title="Drag to resize · double-click to even out"
-          className={`group shrink-0 flex items-center justify-center bg-ghost-border hover:bg-ghost-accent/60 transition-colors ${
-            vertical ? 'h-2 w-full cursor-row-resize' : 'w-2 h-full cursor-col-resize'
-          }`}
-        >
-          <span
-            className={`rounded-full bg-ghost-dim group-hover:bg-ghost-text transition-colors ${
-              vertical ? 'h-[3px] w-9' : 'w-[3px] h-9'
-            }`}
-          />
-        </div>
-        {paneBox('right', true)}
-      </>
-    );
-  }
+  const topPct = `${(win.splitter * 100).toFixed(2)}%`;
 
   return (
     <div
@@ -223,9 +149,22 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
         </WinBtn>
       </div>
 
-      {/* Dual-pane body — stacks top/bottom in portrait, side-by-side when wide */}
-      <div ref={bodyRef} className={`flex-1 flex min-h-0 ${vertical ? 'flex-col' : 'flex-row'}`}>
-        {body}
+      {/* Staging body — files up top, folder picker on the bottom */}
+      <div ref={bodyRef} className="flex-1 flex flex-col min-h-0">
+        <div style={{ flexBasis: topPct }} className="min-h-0 overflow-hidden shrink-0 grow-0">
+          <StagedFilesPane winId={win.id} />
+        </div>
+        <div
+          onPointerDown={startSplit}
+          onDoubleClick={() => store().setSplitter(win.id, 0.5)}
+          title="Drag to resize · double-click to even out"
+          className="group shrink-0 h-2 w-full cursor-row-resize flex items-center justify-center bg-ghost-border hover:bg-ghost-accent/60 transition-colors"
+        >
+          <span className="rounded-full bg-ghost-dim group-hover:bg-ghost-text h-[3px] w-9 transition-colors" />
+        </div>
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <FolderStagingPane winId={win.id} />
+        </div>
       </div>
 
       {/* Resize handles (hidden when maximized) */}
@@ -239,77 +178,6 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
         </>
       )}
     </div>
-  );
-};
-
-/**
- * A minimized pane, shown as a slim rail. It still names the folder that pane is
- * parked in, and stays a live drop target: dragging entries from the other pane
- * (or files from the OS) onto the rail moves/copies them into that folder — so
- * the drag-and-drop workflow survives even when you're down to a single pane.
- */
-const PaneRail: React.FC<{ win: WindowState; side: Side; vertical: boolean }> = ({ win, side, vertical }) => {
-  const [over, setOver] = useState(false);
-  const pane = win.panes[side];
-  const folderName = pane.stack.length ? pane.stack[pane.stack.length - 1].name || '/' : 'No folder open';
-  const itemCount = pane.entries.length;
-
-  const expand = () => useExplorer.getState().expandPanes(win.id);
-
-  const allowDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.dataTransfer.dropEffect = e.ctrlKey || e.metaKey ? 'copy' : 'move';
-    if (!over) setOver(true);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setOver(false);
-    const st = useExplorer.getState();
-    const copy = e.ctrlKey || e.metaKey;
-    if (getDrag()) {
-      st.internalDrop(win.id, side, null, copy);
-    } else if (e.dataTransfer.files?.length || e.dataTransfer.items?.length) {
-      st.externalDrop(win.id, side, e.dataTransfer);
-    }
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={expand}
-      onDragOver={allowDrop}
-      onDragEnter={allowDrop}
-      onDragLeave={() => setOver(false)}
-      onDrop={handleDrop}
-      title={`${folderName} — click to expand · drop here to add to this pane`}
-      className={`group shrink-0 flex items-center gap-2 bg-ghost-surface/70 text-ghost-muted hover:text-ghost-text transition-colors ${
-        vertical
-          ? 'w-full h-[46px] px-3 border-y border-ghost-border flex-row'
-          : 'h-full w-[46px] py-3 border-x border-ghost-border flex-col'
-      } ${over ? 'bg-ghost-accent/15 text-ghost-accent ring-1 ring-inset ring-ghost-accent' : ''}`}
-    >
-      <span className="grid place-items-center w-7 h-7 rounded-lg bg-ghost-card/80 text-ghost-accent shrink-0 group-hover:bg-ghost-accent/20">
-        <Icon name="expand" size={15} />
-      </span>
-      <span className={`flex min-w-0 min-h-0 flex-1 items-center gap-2 ${vertical ? 'flex-row' : 'flex-col'}`}>
-        <Icon name="folder" size={14} className="text-ghost-cyan shrink-0" />
-        <span
-          className="font-medium text-ghost-text overflow-hidden whitespace-nowrap text-ellipsis text-[12px]"
-          style={vertical ? { maxWidth: '100%' } : { writingMode: 'vertical-rl', maxHeight: '100%' }}
-        >
-          {folderName}
-        </span>
-        <span className="text-[10px] text-ghost-muted shrink-0">
-          {itemCount} item{itemCount === 1 ? '' : 's'}
-        </span>
-      </span>
-      {vertical && (
-        <span className="text-[10px] uppercase tracking-wider text-ghost-dim shrink-0 hidden sm:inline">tap to open</span>
-      )}
-    </button>
   );
 };
 
