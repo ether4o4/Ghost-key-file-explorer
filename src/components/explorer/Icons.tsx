@@ -38,6 +38,7 @@ type IconName =
   | 'move'
   | 'tag'
   | 'filter'
+  | 'more'
   | 'search';
 
 const PATHS: Record<IconName, React.ReactNode> = {
@@ -144,6 +145,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   filter: <path d="M22 4H2l8 9v7l4-2v-5z" />,
+  more: (
+    <>
+      <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
+    </>
+  ),
   search: (
     <>
       <circle cx="11" cy="11" r="7" />

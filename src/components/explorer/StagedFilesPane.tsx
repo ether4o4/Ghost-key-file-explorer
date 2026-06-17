@@ -7,10 +7,10 @@ import { Icon, entryIcon } from './Icons';
 import type { IconName } from './Icons';
 
 /**
- * Top deck of the staging window: the files of whichever staged folder is
- * active. Starts blank until a folder is picked in the deck below. Files are
- * tap-to-(multi)select; the selection bar moves/copies them into any of the
- * OTHER staged folders — the whole point of staging a working set.
+ * Top deck of the window: the files of whichever staged folder is active. Starts
+ * blank until a folder is picked below. Files are tap-to-(multi)select with a
+ * name search, select-all, rename, delete, open, and move/copy into any of the
+ * OTHER staged folders.
  */
 function sortFiles(files: DirEntry[], key: SortKey, asc: boolean): DirEntry[] {
   const dir = asc ? 1 : -1;
@@ -29,6 +29,8 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
   const win = useExplorer((s) => s.windows.find((w) => w.id === winId));
   const s = useExplorer.getState;
   const [copyMode, setCopyMode] = useState(false);
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const pane = win?.panes.left;
   const files = useMemo(
@@ -43,6 +45,9 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
   const selected = pane.selected;
   const targets = win.staged.map((ref, idx) => ({ ref, idx })).filter(({ idx }) => idx !== active);
 
+  const q = search.trim().toLowerCase();
+  const shown = q ? files.filter((f) => f.name.toLowerCase().includes(q)) : files;
+
   const toggle = (name: string) => {
     const cur = new Set(selected);
     if (cur.has(name)) cur.delete(name);
@@ -51,6 +56,13 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
   };
 
   const openOne = (entry: DirEntry) => s().openFile(winId, 'left', entry);
+
+  const renameOne = () => {
+    const entry = files.find((f) => f.name === selected[0]);
+    if (!entry) return;
+    const nn = window.prompt('Rename file', entry.name);
+    if (nn && nn.trim() && nn.trim() !== entry.name) s().renameEntry(winId, 'left', entry, nn.trim());
+  };
 
   // ── Blank state: nothing picked yet ──
   if (!activeRef) {
@@ -72,9 +84,18 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
     <div className="flex flex-col h-full bg-ghost-bg">
       <PaneHeader
         title={activeRef.name || 'Files'}
-        subtitle={`${files.length} file${files.length === 1 ? '' : 's'}`}
+        subtitle={q ? `${shown.length} of ${files.length} files` : `${files.length} file${files.length === 1 ? '' : 's'}`}
         right={
           <>
+            <IconBtn
+              name="search"
+              title="Search files"
+              active={searchOpen || !!q}
+              onClick={() => {
+                setSearchOpen((o) => !o);
+                if (searchOpen) setSearch('');
+              }}
+            />
             <select
               value={pane.sortKey}
               onChange={(e) => s().setSort(winId, 'left', e.target.value as SortKey)}
@@ -97,24 +118,32 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
         }
       />
 
+      {searchOpen && (
+        <div className="px-2 py-1.5 border-b border-ghost-border bg-ghost-surface/40 shrink-0">
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search files by name…"
+            className="w-full bg-ghost-card border border-ghost-border rounded-lg px-2.5 py-1.5 text-[12px] text-ghost-text outline-none focus:border-ghost-accent"
+          />
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto" onClick={() => s().setSelected(winId, 'left', [])}>
-        {pane.loading && (
-          <div className="p-4 text-center text-ghost-muted text-xs">Loading…</div>
-        )}
+        {pane.loading && <div className="p-4 text-center text-ghost-muted text-xs">Loading…</div>}
         {pane.error && (
-          <div className="m-3 text-xs text-ghost-red bg-ghost-red/10 border border-ghost-red/30 rounded-lg p-3">
-            {pane.error}
-          </div>
+          <div className="m-3 text-xs text-ghost-red bg-ghost-red/10 border border-ghost-red/30 rounded-lg p-3">{pane.error}</div>
         )}
-        {!pane.loading && !pane.error && files.length === 0 && (
+        {!pane.loading && !pane.error && shown.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-1 py-10 text-ghost-muted text-xs">
             <Icon name="fileText" size={26} className="opacity-40" />
-            <span>No files in this folder</span>
+            <span>{q ? 'No files match' : 'No files in this folder'}</span>
           </div>
         )}
 
         <ul>
-          {files.map((entry) => {
+          {shown.map((entry) => {
             const ic = entryIcon('file', entry.ext);
             const isSel = selected.includes(entry.name);
             return (
@@ -159,21 +188,35 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
         </ul>
       </div>
 
-      {/* Selection action bar — move/copy the picked files into a staged folder */}
+      {/* Selection action bar */}
       {selected.length > 0 && (
         <div className="border-t border-ghost-border bg-ghost-surface/70 px-2 py-2 flex flex-col gap-2">
-          <div className="flex items-center gap-2 text-[11px]">
+          <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
             <span className="font-medium text-ghost-text">{selected.length} selected</span>
+            <button
+              onClick={() => s().setSelected(winId, 'left', shown.map((f) => f.name))}
+              className="px-2 py-1 rounded-md bg-ghost-card border border-ghost-border text-ghost-text hover:border-ghost-accent/50"
+            >
+              All
+            </button>
             {selected.length === 1 && (
-              <button
-                onClick={() => {
-                  const entry = files.find((f) => f.name === selected[0]);
-                  if (entry) openOne(entry);
-                }}
-                className="px-2 py-1 rounded-md bg-ghost-card border border-ghost-border text-ghost-text hover:border-ghost-accent/50"
-              >
-                Open
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    const entry = files.find((f) => f.name === selected[0]);
+                    if (entry) openOne(entry);
+                  }}
+                  className="px-2 py-1 rounded-md bg-ghost-card border border-ghost-border text-ghost-text hover:border-ghost-accent/50"
+                >
+                  Open
+                </button>
+                <button
+                  onClick={renameOne}
+                  className="px-2 py-1 rounded-md bg-ghost-card border border-ghost-border text-ghost-text hover:border-ghost-accent/50"
+                >
+                  Rename
+                </button>
+              </>
             )}
             <button
               onClick={() => s().deleteSelected(winId, 'left')}
@@ -232,11 +275,7 @@ export const StagedFilesPane = React.memo(StagedFilesPaneInner);
 
 // ── Small helpers ──
 
-const PaneHeader: React.FC<{ title: string; subtitle?: string; right?: React.ReactNode }> = ({
-  title,
-  subtitle,
-  right,
-}) => (
+const PaneHeader: React.FC<{ title: string; subtitle?: string; right?: React.ReactNode }> = ({ title, subtitle, right }) => (
   <div className="flex items-center gap-2 px-3 py-1.5 border-b border-ghost-border bg-ghost-surface/60 shrink-0">
     <Icon name="fileText" size={15} className="text-ghost-accent shrink-0" />
     <div className="min-w-0">
@@ -253,8 +292,9 @@ const IconBtn: React.FC<{
   title: string;
   onClick: () => void;
   disabled?: boolean;
+  active?: boolean;
   className?: string;
-}> = ({ name, title, onClick, disabled, className }) => (
+}> = ({ name, title, onClick, disabled, active, className }) => (
   <button
     title={title}
     disabled={disabled}
@@ -263,7 +303,11 @@ const IconBtn: React.FC<{
       onClick();
     }}
     className={`shrink-0 p-1.5 rounded transition-colors ${
-      disabled ? 'text-ghost-dim cursor-not-allowed' : 'text-ghost-muted hover:text-ghost-text hover:bg-ghost-card'
+      disabled
+        ? 'text-ghost-dim cursor-not-allowed'
+        : active
+          ? 'text-ghost-accent bg-ghost-accent/15'
+          : 'text-ghost-muted hover:text-ghost-text hover:bg-ghost-card'
     }`}
   >
     <Icon name={name} size={15} className={className} />

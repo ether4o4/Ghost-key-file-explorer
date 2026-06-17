@@ -18,10 +18,11 @@ import { AXIS_META } from './tagMeta';
  * Bottom deck: a folders-ONLY browser plus the staged-folders tray. Staging a
  * folder is how you FILE it — tapping a folder opens the who/what/when/where
  * prompt (skippable), then loads its files up top. Folders carry their tags
- * independently of their name, and the filter bar separates them by tag.
+ * independently of their name; the filter bar and name search separate them.
  */
 
 type PromptState = { entry: DirEntry; key: string; mode: 'stage' | 'edit' };
+type MenuState = { entry: DirEntry; x: number; y: number };
 
 const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
   const win = useExplorer((s) => s.windows.find((w) => w.id === winId));
@@ -42,7 +43,6 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
     [pane],
   );
 
-  // Vocabulary of every tag value used so far, per axis — drives quick picks + filters.
   const vocab = useMemo(() => {
     const v = emptyTags();
     for (const t of Object.values(folderTags)) {
@@ -57,8 +57,11 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
   }, [folderTags]);
 
   const [prompt, setPrompt] = useState<PromptState | null>(null);
+  const [menu, setMenu] = useState<MenuState | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filter, setFilter] = useState<FolderTags>(emptyTags);
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
 
   if (!win || !pane) return null;
 
@@ -67,6 +70,7 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
   const hasFolder = pane.stack.length > 0;
   const hiddenFiles = pane.entries.length - folders.length;
   const filterActive = !tagsAreEmpty(filter);
+  const nameQ = search.trim().toLowerCase();
 
   const tagKeyOf = (entry: DirEntry) => entry.uri ?? folderKey(stackNames, entry.name);
   const tagsOf = (entry: DirEntry): FolderTags | undefined => folderTags[tagKeyOf(entry)];
@@ -85,7 +89,8 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
       return filter[axis].some((fv) => t[axis].some((tv) => tv.toLowerCase() === fv.toLowerCase()));
     });
   };
-  const visibleFolders = filterActive ? folders.filter(matchesFilter) : folders;
+  const visibleFolders = folders.filter((e) => matchesFilter(e) && (!nameQ || e.name.toLowerCase().includes(nameQ)));
+  const narrowed = filterActive || !!nameQ;
 
   const toggleFilter = (axis: TagAxis, value: string) =>
     setFilter((f) => ({
@@ -102,7 +107,6 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
       ),
     }));
 
-  // Tap a folder → file it (prompt for tags) then stage + open it.
   const openStagePrompt = (entry: DirEntry) => setPrompt({ entry, key: tagKeyOf(entry), mode: 'stage' });
   const openEditPrompt = (entry: DirEntry) => setPrompt({ entry, key: tagKeyOf(entry), mode: 'edit' });
 
@@ -116,6 +120,11 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
     if (!prompt) return;
     if (prompt.mode === 'stage') s().stageFolder(winId, prompt.entry);
     setPrompt(null);
+  };
+
+  const renameFolder = (entry: DirEntry) => {
+    const nn = window.prompt('Rename folder', entry.name);
+    if (nn && nn.trim() && nn.trim() !== entry.name) s().renameEntry(winId, 'right', entry, nn.trim());
   };
 
   return (
@@ -176,6 +185,18 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
           )}
         </div>
         <button
+          onClick={() => {
+            setSearchOpen((o) => !o);
+            if (searchOpen) setSearch('');
+          }}
+          title="Search folders"
+          className={`shrink-0 p-1.5 rounded transition-colors ${
+            searchOpen || nameQ ? 'text-ghost-accent bg-ghost-accent/15' : 'text-ghost-muted hover:text-ghost-text hover:bg-ghost-card'
+          }`}
+        >
+          <Icon name="search" size={15} />
+        </button>
+        <button
           onClick={() => setFilterOpen((o) => !o)}
           title="Filter by tags"
           className={`shrink-0 p-1.5 rounded transition-colors ${
@@ -187,6 +208,18 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
         <IconBtn name="folderPlus" title="New folder" disabled={!hasFolder} onClick={() => s().newFolder(winId, 'right')} />
         <IconBtn name="refresh" title="Refresh" disabled={!hasFolder} onClick={() => s().refresh(winId, 'right')} />
       </div>
+
+      {searchOpen && (
+        <div className="px-2 py-1.5 border-b border-ghost-border bg-ghost-surface/30 shrink-0">
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search folders by name…"
+            className="w-full bg-ghost-card border border-ghost-border rounded-lg px-2.5 py-1.5 text-[12px] text-ghost-text outline-none focus:border-ghost-accent"
+          />
+        </div>
+      )}
 
       {/* Filter bar */}
       {filterOpen && (
@@ -239,9 +272,7 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
               </div>
             )}
             {pane.error && (
-              <div className="mb-3 text-xs text-ghost-red bg-ghost-red/10 border border-ghost-red/30 rounded-lg p-3">
-                {pane.error}
-              </div>
+              <div className="mb-3 text-xs text-ghost-red bg-ghost-red/10 border border-ghost-red/30 rounded-lg p-3">{pane.error}</div>
             )}
             <div className="text-[11px] uppercase tracking-wider text-ghost-muted mb-2 px-1">Locations</div>
             <div className="grid grid-cols-2 gap-2">
@@ -281,8 +312,8 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
             )}
             {!pane.loading && folders.length > 0 && visibleFolders.length === 0 && (
               <div className="flex flex-col items-center justify-center gap-1 py-10 text-ghost-muted text-xs">
-                <Icon name="filter" size={24} className="opacity-40" />
-                <span>No folders match the filter</span>
+                <Icon name={nameQ ? 'search' : 'filter'} size={24} className="opacity-40" />
+                <span>No folders match</span>
               </div>
             )}
             <ul>
@@ -293,7 +324,7 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
                 return (
                   <li
                     key={entry.name}
-                    className={`flex items-start gap-2 px-3 py-2 border-b border-ghost-border/40 cursor-default select-none transition-colors ${
+                    className={`flex items-start gap-1 px-3 py-2 border-b border-ghost-border/40 cursor-default select-none transition-colors ${
                       isStaged && sIdx === active ? 'bg-ghost-accent/15' : 'hover:bg-ghost-card'
                     }`}
                   >
@@ -323,6 +354,16 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
                       <Icon name="tag" size={15} />
                     </button>
                     <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenu({ entry, x: e.clientX, y: e.clientY });
+                      }}
+                      title="More"
+                      className="shrink-0 p-1.5 rounded text-ghost-muted hover:text-ghost-text hover:bg-ghost-surface"
+                    >
+                      <Icon name="more" size={15} />
+                    </button>
+                    <button
                       onClick={() => s().enterDir(winId, 'right', entry)}
                       title="Browse inside"
                       className="shrink-0 p-1.5 rounded text-ghost-muted hover:text-ghost-text hover:bg-ghost-surface"
@@ -340,10 +381,28 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
       {/* Status */}
       {hasFolder && (
         <div className="px-3 py-1 border-t border-ghost-border bg-ghost-surface/50 text-[10px] text-ghost-muted shrink-0">
-          {filterActive ? `${visibleFolders.length} of ${folders.length}` : folders.length} folder
+          {narrowed ? `${visibleFolders.length} of ${folders.length}` : folders.length} folder
           {folders.length === 1 ? '' : 's'}
           {hiddenFiles > 0 ? ` · ${hiddenFiles} file${hiddenFiles === 1 ? '' : 's'} hidden` : ''}
         </div>
+      )}
+
+      {/* Per-folder action menu */}
+      {menu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} onContextMenu={(e) => { e.preventDefault(); setMenu(null); }} />
+          <div
+            className="fixed z-50 min-w-[170px] py-1 rounded-lg border border-ghost-border bg-ghost-surface shadow-2xl glass animate-fade-in"
+            style={{ left: Math.min(menu.x, window.innerWidth - 190), top: Math.min(menu.y, window.innerHeight - 170) }}
+          >
+            <MenuItem icon="folderOpen" label="Open / stage" onClick={() => { openStagePrompt(menu.entry); setMenu(null); }} />
+            <MenuItem icon="chevronRight" label="Browse inside" onClick={() => { s().enterDir(winId, 'right', menu.entry); setMenu(null); }} />
+            <MenuItem icon="tag" label="Edit tags" onClick={() => { openEditPrompt(menu.entry); setMenu(null); }} />
+            <MenuItem icon="pencil" label="Rename" onClick={() => { const en = menu.entry; setMenu(null); renameFolder(en); }} />
+            <div className="my-1 h-px bg-ghost-border" />
+            <MenuItem icon="trash" label="Delete" danger onClick={() => { const en = menu.entry; setMenu(null); s().deleteEntry(winId, 'right', en); }} />
+          </div>
+        </>
       )}
 
       {prompt && (
@@ -378,6 +437,18 @@ const TagChips: React.FC<{ tags: FolderTags }> = ({ tags }) => (
       )),
     )}
   </span>
+);
+
+const MenuItem: React.FC<{ icon: IconName; label: string; onClick: () => void; danger?: boolean }> = ({ icon, label, onClick, danger }) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center gap-2 w-full px-3 py-2 text-[12px] text-left hover:bg-ghost-card transition-colors ${
+      danger ? 'text-ghost-red' : 'text-ghost-text'
+    }`}
+  >
+    <Icon name={icon} size={14} />
+    {label}
+  </button>
 );
 
 const IconBtn: React.FC<{

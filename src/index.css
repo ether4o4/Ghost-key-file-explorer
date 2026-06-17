@@ -11,7 +11,10 @@
 html, body, #root {
   height: 100%;
   overflow: hidden;
-  background: #0a0b0e;
+  /* Transparent so the host device's wallpaper/home screen shows behind the
+     floating window (the native activity is configured to show the wallpaper).
+     On the web the Explorer paints its own gk-desktop backdrop instead. */
+  background: transparent;
   color: #e2e8f0;
   font-family: 'Inter', system-ui, sans-serif;
 }

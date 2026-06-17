@@ -216,6 +216,7 @@ interface ExplorerStore {
   newFolder: (id: number, side: Side) => Promise<void>;
   renameEntry: (id: number, side: Side, entry: DirEntry, newName: string) => Promise<void>;
   deleteSelected: (id: number, side: Side) => Promise<void>;
+  deleteEntry: (id: number, side: Side, entry: DirEntry) => Promise<void>;
   openFile: (id: number, side: Side, entry: DirEntry) => Promise<void>;
 
   // ── Drag & drop ──
@@ -340,19 +341,19 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const { nextId, zTop, windows } = get();
       const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
       const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-      const w = Math.min(1100, Math.max(720, Math.round(vw * 0.78)));
-      const h = Math.min(720, Math.max(440, Math.round(vh * 0.74)));
-      const offset = (windows.length % 6) * 28;
+      const phone = vw < 760;
+      const w = phone ? Math.round(vw * 0.92) : Math.min(1100, Math.max(720, Math.round(vw * 0.78)));
+      const h = phone ? Math.round(vh * 0.82) : Math.min(760, Math.max(440, Math.round(vh * 0.78)));
       const win: WindowState = {
         id: nextId,
-        title: 'Ghost Staging',
-        x: Math.max(12, Math.round((vw - w) / 2) + offset),
-        y: Math.max(12, Math.round((vh - h) / 2) - 16 + offset),
+        title: 'Ghost Key',
+        x: Math.max(8, Math.round((vw - w) / 2)),
+        y: Math.max(8, Math.round((vh - h) / 2)),
         w,
         h,
         z: zTop + 1,
         minimized: false,
-        maximized: vw < 760, // phones: start maximized
+        maximized: phone, // phones open maximized; restore reveals the floating box
         collapsed: null,
         splitter: 0.5,
         staged: [],
@@ -493,6 +494,19 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         for (const entry of targets) await get().adapter.remove(dir, entry);
         await get().refresh(id, side);
         get().notify(`Deleted ${label}`, 'success');
+      } catch (e) {
+        get().notify(e instanceof Error ? e.message : 'Delete failed', 'error');
+      }
+    },
+
+    deleteEntry: async (id, side, entry) => {
+      const dir = currentDir(id, side);
+      if (!dir) return;
+      if (!window.confirm(`Delete "${entry.name}"? This cannot be undone.`)) return;
+      try {
+        await get().adapter.remove(dir, entry);
+        await get().refresh(id, side);
+        get().notify(`Deleted "${entry.name}"`, 'success');
       } catch (e) {
         get().notify(e instanceof Error ? e.message : 'Delete failed', 'error');
       }
