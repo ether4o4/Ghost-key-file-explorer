@@ -192,6 +192,8 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
       <div className="w-px h-5 bg-ghost-border mx-0.5" />
       <IconBtn name="list" title="List view" active={pane.view === 'list'} onClick={() => s().setView(winId, side, 'list')} />
       <IconBtn name="grid" title="Grid view" active={pane.view === 'grid'} onClick={() => s().setView(winId, side, 'grid')} />
+      <div className="w-px h-5 bg-ghost-border mx-0.5" />
+      <IconBtn name="collapse" title="Minimize this pane to a rail" onClick={() => s().collapsePane(winId, side)} />
     </div>
   );
 
@@ -495,7 +497,7 @@ const IconBtn: React.FC<{
       e.stopPropagation();
       onClick();
     }}
-    className={`p-1.5 rounded transition-colors ${
+    className={`shrink-0 p-1.5 rounded transition-colors ${
       disabled
         ? 'text-ghost-dim cursor-not-allowed'
         : active

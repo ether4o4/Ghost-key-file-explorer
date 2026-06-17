@@ -35,7 +35,8 @@ export interface WindowState {
   z: number;
   minimized: boolean;
   maximized: boolean;
-  splitter: number; // left-pane fraction (0..1)
+  collapsed: Side | null; // a pane minimized to a rail (the OTHER pane fills the window)
+  splitter: number; // first-pane fraction (0..1): left when side-by-side, top when stacked
   panes: Record<Side, PaneState>;
   restore?: { x: number; y: number; w: number; h: number };
 }
@@ -127,6 +128,8 @@ interface ExplorerStore {
   minimize: (id: number) => void;
   unminimize: (id: number) => void;
   toggleMax: (id: number) => void;
+  collapsePane: (id: number, side: Side) => void;
+  expandPanes: (id: number) => void;
   setSplitter: (id: number, frac: number) => void;
 
   // ── Pane navigation ──
@@ -248,6 +251,7 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         z: zTop + 1,
         minimized: false,
         maximized: vw < 760, // phones: start maximized
+        collapsed: null,
         splitter: 0.5,
         panes: { left: emptyPane(), right: emptyPane() },
       };
@@ -279,6 +283,13 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         }
         return { ...w, maximized: true, restore: { x: w.x, y: w.y, w: w.w, h: w.h } };
       }),
+
+    // Minimize a single pane to a labeled rail; the other pane takes the whole
+    // window. Nothing about the collapsed pane is reset — its open folder,
+    // breadcrumb trail and selection all live in the store and return on expand.
+    collapsePane: (id, side) => patchWindow(id, (w) => ({ ...w, collapsed: side })),
+
+    expandPanes: (id) => patchWindow(id, (w) => ({ ...w, collapsed: null })),
 
     setSplitter: (id, frac) =>
       patchWindow(id, (w) => ({ ...w, splitter: Math.min(0.85, Math.max(0.15, frac)) })),
