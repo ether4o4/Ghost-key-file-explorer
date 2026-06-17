@@ -1,15 +1,15 @@
-import { Desktop } from './components/explorer/Desktop';
+import { Explorer } from './components/explorer/Explorer';
 
 /**
- * Ghost Key — Dual-Pane File Explorer.
+ * Ghost Key — File Explorer.
  *
- * A Windows-style desktop shell (draggable / minimizeable / resizable windows)
- * hosting a two-pane file manager with real read/write access to the filesystem
- * (no root): the File System Access API on the web, Capacitor Filesystem in the
- * Android APK. Directories are read on demand — no background scanning/indexing.
+ * Not a launcher: opening the app goes straight into a single full-screen file
+ * manager with real read/write access to the filesystem (no root) — the File
+ * System Access API on the web, Capacitor Filesystem in the Android APK.
+ * Directories are read on demand: no background scanning or indexing.
  */
 function App() {
-  return <Desktop />;
+  return <Explorer />;
 }
 
 export default App;

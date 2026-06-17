@@ -217,11 +217,12 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
 
     init: async () => {
       const adapter = getAdapter();
-      set({ folderPrefs: loadPrefs() });
+      // Show the explorer immediately, then fill in storage access + roots.
+      set({ adapter, folderPrefs: loadPrefs() });
+      if (get().windows.length === 0) get().newWindow();
       await adapter.ensureAccess().catch(() => false);
       const roots = await adapter.roots().catch(() => []);
-      set({ adapter, roots });
-      if (get().windows.length === 0) get().newWindow();
+      set({ roots });
     },
 
     notify: (msg, kind = 'info') => {
