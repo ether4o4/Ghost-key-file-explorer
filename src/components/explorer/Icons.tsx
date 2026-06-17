@@ -36,6 +36,8 @@ type IconName =
   | 'home'
   | 'copy'
   | 'move'
+  | 'tag'
+  | 'filter'
   | 'search';
 
 const PATHS: Record<IconName, React.ReactNode> = {
@@ -135,6 +137,13 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   move: <path d="M12 3v18M3 12h18M8 7l-5 5 5 5M16 7l5 5-5 5M7 8l5-5 5 5M7 16l5 5 5-5" />,
+  tag: (
+    <>
+      <path d="M3 5.5A2.5 2.5 0 0 1 5.5 3H11a2 2 0 0 1 1.4.6l8 8a2 2 0 0 1 0 2.8l-5.6 5.6a2 2 0 0 1-2.8 0l-8-8A2 2 0 0 1 3 10.5z" />
+      <circle cx="7.5" cy="7.5" r="1.3" />
+    </>
+  ),
+  filter: <path d="M22 4H2l8 9v7l4-2v-5z" />,
   search: (
     <>
       <circle cx="11" cy="11" r="7" />

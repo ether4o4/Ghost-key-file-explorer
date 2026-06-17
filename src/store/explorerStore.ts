@@ -110,6 +110,62 @@ export function folderKey(stackNames: string[], name: string): string {
   return [...stackNames, name].join('/');
 }
 
+// ── Smart filing: who / what / when / where tags on folders ──
+// A folder keeps its filesystem name but can be categorised along four axes, so
+// the same folder can be separated/filtered many ways. Each axis holds any
+// number of values. Like folder prefs, tags live only in the app (localStorage)
+// — we never rename folders or write marker files, and there's no indexing.
+export const TAG_AXES = ['who', 'what', 'when', 'where'] as const;
+export type TagAxis = (typeof TAG_AXES)[number];
+export type FolderTags = Record<TagAxis, string[]>;
+
+export function emptyTags(): FolderTags {
+  return { who: [], what: [], when: [], where: [] };
+}
+
+export function tagsAreEmpty(t: FolderTags): boolean {
+  return TAG_AXES.every((a) => t[a].length === 0);
+}
+
+function normalizeAxis(values: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of values) {
+    const v = raw.trim();
+    if (v && !out.some((x) => x.toLowerCase() === v.toLowerCase())) out.push(v);
+  }
+  return out;
+}
+
+const TAGS_KEY = 'gk:folderTags';
+
+function loadTags(): Record<string, FolderTags> {
+  try {
+    const raw = localStorage.getItem(TAGS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, Partial<FolderTags>>;
+    const out: Record<string, FolderTags> = {};
+    for (const [key, t] of Object.entries(parsed)) {
+      out[key] = {
+        who: Array.isArray(t.who) ? t.who : [],
+        what: Array.isArray(t.what) ? t.what : [],
+        when: Array.isArray(t.when) ? t.when : [],
+        where: Array.isArray(t.where) ? t.where : [],
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveTags(tags: Record<string, FolderTags>): void {
+  try {
+    localStorage.setItem(TAGS_KEY, JSON.stringify(tags));
+  } catch {
+    /* storage unavailable / full — keep in-memory only */
+  }
+}
+
 interface ExplorerStore {
   adapter: FsAdapter;
   roots: RootShortcut[];
@@ -118,6 +174,7 @@ interface ExplorerStore {
   nextId: number;
   toast: { msg: string; kind: ToastKind } | null;
   folderPrefs: Record<string, FolderPref>;
+  folderTags: Record<string, FolderTags>;
 
   init: () => Promise<void>;
   notify: (msg: string, kind?: ToastKind) => void;
@@ -125,6 +182,10 @@ interface ExplorerStore {
   // ── Folder customization ──
   setFolderPref: (key: string, pref: FolderPref) => void;
   resetFolderPref: (key: string) => void;
+
+  // ── Smart filing: folder tags ──
+  setFolderTags: (key: string, tags: FolderTags) => void;
+  clearFolderTags: (key: string) => void;
 
   // ── Window lifecycle ──
   newWindow: () => void;
@@ -214,11 +275,12 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     nextId: 1,
     toast: null,
     folderPrefs: {},
+    folderTags: {},
 
     init: async () => {
       const adapter = getAdapter();
       // Show the explorer immediately, then fill in storage access + roots.
-      set({ adapter, folderPrefs: loadPrefs() });
+      set({ adapter, folderPrefs: loadPrefs(), folderTags: loadTags() });
       if (get().windows.length === 0) get().newWindow();
       await adapter.ensureAccess().catch(() => false);
       const roots = await adapter.roots().catch(() => []);
@@ -250,6 +312,27 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       delete next[key];
       savePrefs(next);
       set({ folderPrefs: next });
+    },
+
+    setFolderTags: (key, tags) => {
+      const cleaned: FolderTags = {
+        who: normalizeAxis(tags.who),
+        what: normalizeAxis(tags.what),
+        when: normalizeAxis(tags.when),
+        where: normalizeAxis(tags.where),
+      };
+      const next = { ...get().folderTags };
+      if (tagsAreEmpty(cleaned)) delete next[key];
+      else next[key] = cleaned;
+      saveTags(next);
+      set({ folderTags: next });
+    },
+
+    clearFolderTags: (key) => {
+      const next = { ...get().folderTags };
+      delete next[key];
+      saveTags(next);
+      set({ folderTags: next });
     },
 
     // ── Window lifecycle ──

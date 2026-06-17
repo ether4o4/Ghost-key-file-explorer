@@ -1,23 +1,37 @@
-import React, { useMemo } from 'react';
-import { useExplorer, MAX_STAGED } from '../../store/explorerStore';
+import React, { useMemo, useState } from 'react';
+import {
+  useExplorer,
+  MAX_STAGED,
+  TAG_AXES,
+  emptyTags,
+  tagsAreEmpty,
+  folderKey,
+} from '../../store/explorerStore';
 import type { DirEntry } from '../../core/fs';
+import type { FolderTags, TagAxis } from '../../store/explorerStore';
 import { Icon } from './Icons';
 import type { IconName } from './Icons';
+import { TagPrompt } from './TagPrompt';
+import { AXIS_META } from './tagMeta';
 
 /**
- * Bottom deck of the staging window: a folders-ONLY browser plus a tray of the
- * folders you've staged to work in. Files at the current location are hidden on
- * purpose — this deck is for choosing folders. Tapping a folder stages it (adds
- * it to the tray and loads its files into the top deck); the chevron drills in
- * to browse subfolders.
+ * Bottom deck: a folders-ONLY browser plus the staged-folders tray. Staging a
+ * folder is how you FILE it — tapping a folder opens the who/what/when/where
+ * prompt (skippable), then loads its files up top. Folders carry their tags
+ * independently of their name, and the filter bar separates them by tag.
  */
+
+type PromptState = { entry: DirEntry; key: string; mode: 'stage' | 'edit' };
+
 const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
   const win = useExplorer((s) => s.windows.find((w) => w.id === winId));
   const roots = useExplorer((s) => s.roots);
   const adapter = useExplorer((s) => s.adapter);
+  const folderTags = useExplorer((s) => s.folderTags);
   const s = useExplorer.getState;
 
   const pane = win?.panes.right;
+  const stackNames = useMemo(() => (pane ? pane.stack.map((r) => r.name) : []), [pane]);
   const folders = useMemo(
     () =>
       pane
@@ -28,17 +42,56 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
     [pane],
   );
 
+  // Vocabulary of every tag value used so far, per axis — drives quick picks + filters.
+  const vocab = useMemo(() => {
+    const v = emptyTags();
+    for (const t of Object.values(folderTags)) {
+      for (const axis of TAG_AXES) {
+        for (const val of t[axis]) {
+          if (!v[axis].some((x) => x.toLowerCase() === val.toLowerCase())) v[axis].push(val);
+        }
+      }
+    }
+    for (const axis of TAG_AXES) v[axis].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    return v;
+  }, [folderTags]);
+
+  const [prompt, setPrompt] = useState<PromptState | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filter, setFilter] = useState<FolderTags>(emptyTags);
+
   if (!win || !pane) return null;
 
   const staged = win.staged;
   const active = win.activeStaged;
   const hasFolder = pane.stack.length > 0;
   const hiddenFiles = pane.entries.length - folders.length;
+  const filterActive = !tagsAreEmpty(filter);
+
+  const tagKeyOf = (entry: DirEntry) => entry.uri ?? folderKey(stackNames, entry.name);
+  const tagsOf = (entry: DirEntry): FolderTags | undefined => folderTags[tagKeyOf(entry)];
 
   const stagedIdxOf = (entry: DirEntry): number =>
     staged.findIndex((r) =>
       r.uri && entry.uri ? r.uri === entry.uri : r.handle && entry.handle ? r.handle === entry.handle : false,
     );
+
+  const matchesFilter = (entry: DirEntry): boolean => {
+    if (!filterActive) return true;
+    const t = tagsOf(entry);
+    return TAG_AXES.every((axis) => {
+      if (filter[axis].length === 0) return true;
+      if (!t) return false;
+      return filter[axis].some((fv) => t[axis].some((tv) => tv.toLowerCase() === fv.toLowerCase()));
+    });
+  };
+  const visibleFolders = filterActive ? folders.filter(matchesFilter) : folders;
+
+  const toggleFilter = (axis: TagAxis, value: string) =>
+    setFilter((f) => ({
+      ...f,
+      [axis]: f[axis].includes(value) ? f[axis].filter((v) => v !== value) : [...f[axis], value],
+    }));
 
   const loadHome = () =>
     useExplorer.setState((st) => ({
@@ -49,13 +102,29 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
       ),
     }));
 
+  // Tap a folder → file it (prompt for tags) then stage + open it.
+  const openStagePrompt = (entry: DirEntry) => setPrompt({ entry, key: tagKeyOf(entry), mode: 'stage' });
+  const openEditPrompt = (entry: DirEntry) => setPrompt({ entry, key: tagKeyOf(entry), mode: 'edit' });
+
+  const handleSave = (tags: FolderTags) => {
+    if (!prompt) return;
+    s().setFolderTags(prompt.key, tags);
+    if (prompt.mode === 'stage') s().stageFolder(winId, prompt.entry);
+    setPrompt(null);
+  };
+  const handleSkip = () => {
+    if (!prompt) return;
+    if (prompt.mode === 'stage') s().stageFolder(winId, prompt.entry);
+    setPrompt(null);
+  };
+
   return (
     <div className="flex flex-col h-full bg-ghost-bg border-t border-ghost-border">
       {/* Staged tray */}
       <div className="flex items-center gap-1.5 px-2 py-2 border-b border-ghost-border bg-ghost-surface/50 overflow-x-auto no-scrollbar shrink-0">
         <span className="text-[10px] uppercase tracking-wider text-ghost-muted shrink-0 mr-0.5">Staged</span>
         {staged.length === 0 && (
-          <span className="text-[11px] text-ghost-dim shrink-0">Tap a folder below to stage it (up to {MAX_STAGED})</span>
+          <span className="text-[11px] text-ghost-dim shrink-0">Tap a folder below to file &amp; stage it (up to {MAX_STAGED})</span>
         )}
         {staged.map((ref, idx) => (
           <div
@@ -106,9 +175,59 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
             <span className="text-[11px] text-ghost-muted px-1">Pick a location to browse →</span>
           )}
         </div>
+        <button
+          onClick={() => setFilterOpen((o) => !o)}
+          title="Filter by tags"
+          className={`shrink-0 p-1.5 rounded transition-colors ${
+            filterActive || filterOpen ? 'text-ghost-accent bg-ghost-accent/15' : 'text-ghost-muted hover:text-ghost-text hover:bg-ghost-card'
+          }`}
+        >
+          <Icon name="filter" size={15} />
+        </button>
         <IconBtn name="folderPlus" title="New folder" disabled={!hasFolder} onClick={() => s().newFolder(winId, 'right')} />
         <IconBtn name="refresh" title="Refresh" disabled={!hasFolder} onClick={() => s().refresh(winId, 'right')} />
       </div>
+
+      {/* Filter bar */}
+      {filterOpen && (
+        <div className="px-2 py-2 border-b border-ghost-border bg-ghost-bg/70 flex flex-col gap-1.5 shrink-0 max-h-[40%] overflow-y-auto">
+          {TAG_AXES.every((axis) => vocab[axis].length === 0) ? (
+            <div className="text-[11px] text-ghost-muted px-1">No tags yet — stage a folder to start filing.</div>
+          ) : (
+            TAG_AXES.map((axis) =>
+              vocab[axis].length === 0 ? null : (
+                <div key={axis} className="flex items-start gap-2">
+                  <span className="text-[10px] uppercase tracking-wide mt-1 w-9 shrink-0" style={{ color: AXIS_META[axis].color }}>
+                    {AXIS_META[axis].label}
+                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {vocab[axis].map((v) => {
+                      const on = filter[axis].includes(v);
+                      return (
+                        <button
+                          key={v}
+                          onClick={() => toggleFilter(axis, v)}
+                          className={`px-2 py-0.5 rounded-full text-[11px] border transition-colors ${
+                            on ? 'text-ghost-text' : 'border-ghost-border text-ghost-muted hover:text-ghost-text'
+                          }`}
+                          style={on ? { borderColor: AXIS_META[axis].color, background: `${AXIS_META[axis].color}22` } : undefined}
+                        >
+                          {v}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ),
+            )
+          )}
+          {filterActive && (
+            <button onClick={() => setFilter(emptyTags())} className="self-start text-[11px] text-ghost-muted hover:text-ghost-text mt-0.5">
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Body */}
       <div className="flex-1 overflow-auto">
@@ -160,29 +279,48 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
                 <span className="opacity-70">Use ↑ Up or pick another location</span>
               </div>
             )}
+            {!pane.loading && folders.length > 0 && visibleFolders.length === 0 && (
+              <div className="flex flex-col items-center justify-center gap-1 py-10 text-ghost-muted text-xs">
+                <Icon name="filter" size={24} className="opacity-40" />
+                <span>No folders match the filter</span>
+              </div>
+            )}
             <ul>
-              {folders.map((entry) => {
+              {visibleFolders.map((entry) => {
                 const sIdx = stagedIdxOf(entry);
                 const isStaged = sIdx >= 0;
+                const tags = tagsOf(entry);
                 return (
                   <li
                     key={entry.name}
-                    className={`flex items-center gap-2 px-3 py-2 border-b border-ghost-border/40 cursor-default select-none transition-colors ${
+                    className={`flex items-start gap-2 px-3 py-2 border-b border-ghost-border/40 cursor-default select-none transition-colors ${
                       isStaged && sIdx === active ? 'bg-ghost-accent/15' : 'hover:bg-ghost-card'
                     }`}
                   >
                     <button
-                      onClick={() => s().stageFolder(winId, entry)}
-                      title={isStaged ? `${entry.name} (staged) — tap to view its files` : `Stage ${entry.name}`}
-                      className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                      onClick={() => openStagePrompt(entry)}
+                      title={isStaged ? `${entry.name} (staged) — tap to view its files` : `File & stage ${entry.name}`}
+                      className="flex flex-col gap-1 flex-1 min-w-0 text-left pt-0.5"
                     >
-                      <Icon name="folder" size={18} className="text-ghost-cyan shrink-0" />
-                      <span className="truncate text-[13px] text-ghost-text">{entry.name}</span>
-                      {isStaged && (
-                        <span className="shrink-0 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-ghost-accent/25 text-ghost-accent border border-ghost-accent/40">
-                          staged
-                        </span>
-                      )}
+                      <span className="flex items-center gap-2 min-w-0">
+                        <Icon name="folder" size={18} className="text-ghost-cyan shrink-0" />
+                        <span className="truncate text-[13px] text-ghost-text">{entry.name}</span>
+                        {isStaged && (
+                          <span className="shrink-0 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-ghost-accent/25 text-ghost-accent border border-ghost-accent/40">
+                            staged
+                          </span>
+                        )}
+                      </span>
+                      {tags && !tagsAreEmpty(tags) && <TagChips tags={tags} />}
+                    </button>
+                    <button
+                      onClick={() => openEditPrompt(entry)}
+                      title="Edit tags"
+                      className={`shrink-0 p-1.5 rounded hover:bg-ghost-surface ${
+                        tags && !tagsAreEmpty(tags) ? 'text-ghost-accent' : 'text-ghost-muted hover:text-ghost-text'
+                      }`}
+                    >
+                      <Icon name="tag" size={15} />
                     </button>
                     <button
                       onClick={() => s().enterDir(winId, 'right', entry)}
@@ -202,15 +340,45 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
       {/* Status */}
       {hasFolder && (
         <div className="px-3 py-1 border-t border-ghost-border bg-ghost-surface/50 text-[10px] text-ghost-muted shrink-0">
-          {folders.length} folder{folders.length === 1 ? '' : 's'}
+          {filterActive ? `${visibleFolders.length} of ${folders.length}` : folders.length} folder
+          {folders.length === 1 ? '' : 's'}
           {hiddenFiles > 0 ? ` · ${hiddenFiles} file${hiddenFiles === 1 ? '' : 's'} hidden` : ''}
         </div>
+      )}
+
+      {prompt && (
+        <TagPrompt
+          title={prompt.entry.name}
+          initial={folderTags[prompt.key] ?? emptyTags()}
+          vocab={vocab}
+          saveLabel={prompt.mode === 'stage' ? 'Save & open' : 'Save'}
+          skipLabel={prompt.mode === 'stage' ? 'Skip' : 'Cancel'}
+          onSave={handleSave}
+          onSkip={handleSkip}
+        />
       )}
     </div>
   );
 };
 
 export const FolderStagingPane = React.memo(FolderStagingPaneInner);
+
+/** Compact, colour-coded row of a folder's who/what/when/where tags. */
+const TagChips: React.FC<{ tags: FolderTags }> = ({ tags }) => (
+  <span className="flex flex-wrap gap-1">
+    {TAG_AXES.flatMap((axis) =>
+      tags[axis].map((v) => (
+        <span
+          key={`${axis}:${v}`}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] leading-none text-ghost-muted bg-ghost-card/70"
+        >
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: AXIS_META[axis].color }} />
+          {v}
+        </span>
+      )),
+    )}
+  </span>
+);
 
 const IconBtn: React.FC<{
   name: IconName;
