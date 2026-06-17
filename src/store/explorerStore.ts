@@ -154,6 +154,9 @@ interface ExplorerStore {
   // ── Drag & drop ──
   internalDrop: (id: number, side: Side, destEntry: DirEntry | null, copy: boolean) => Promise<void>;
   externalDrop: (id: number, side: Side, dt: DataTransfer) => Promise<void>;
+  // Touch-friendly move/copy: send the current selection to the other pane's
+  // folder without any drag gesture (drag-and-drop is mouse-only on Android).
+  sendSelection: (id: number, side: Side, copy: boolean) => Promise<void>;
 }
 
 export const useExplorer = create<ExplorerStore>((set, get) => {
@@ -479,6 +482,52 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         }
       } catch (e) {
         get().notify(e instanceof Error ? e.message : 'Import failed', 'error');
+      }
+    },
+
+    sendSelection: async (id, side, copy) => {
+      const otherSide: Side = side === 'left' ? 'right' : 'left';
+      const srcDir = currentDir(id, side);
+      const srcPane = getPane(id, side);
+      const destDir = currentDir(id, otherSide);
+      if (!srcDir || !srcPane) return;
+      if (srcPane.selected.length === 0) return;
+      if (!destDir) {
+        get().notify('Open a folder in the other pane first', 'info');
+        return;
+      }
+      if (sameDir(srcDir, destDir)) {
+        get().notify('Both panes are showing the same folder', 'info');
+        return;
+      }
+      const targets = srcPane.entries.filter((e) => srcPane.selected.includes(e.name));
+      if (targets.length === 0) return;
+
+      const mode = copy ? 'copy' : 'move';
+      let done = 0;
+      try {
+        for (const entry of targets) {
+          // Never move/copy a folder into itself or one of its descendants.
+          if (entry.kind === 'directory') {
+            let intoSelf = false;
+            if (entry.uri && destDir.uri) {
+              intoSelf = destDir.uri === entry.uri || destDir.uri.startsWith(`${entry.uri}/`);
+            } else if (entry.handle && destDir.handle && entry.handle.isSameEntry) {
+              intoSelf = await entry.handle.isSameEntry(destDir.handle);
+            }
+            if (intoSelf) continue;
+          }
+          await get().adapter.transfer(srcDir, entry, destDir, mode);
+          done++;
+        }
+        if (done > 0) {
+          get().notify(`${copy ? 'Copied' : 'Moved'} ${done} item${done === 1 ? '' : 's'} → other pane`, 'success');
+        }
+      } catch (e) {
+        get().notify(e instanceof Error ? e.message : 'Transfer failed', 'error');
+      } finally {
+        await get().refresh(id, side);
+        await get().refresh(id, otherSide);
       }
     },
   };
