@@ -13,6 +13,16 @@ export type Side = 'left' | 'right';
 export type ViewMode = 'list' | 'grid';
 export type SortKey = 'name' | 'size' | 'mtime' | 'kind';
 export type ToastKind = 'info' | 'success' | 'error';
+export type Theme = 'light' | 'dark';
+
+const THEME_KEY = 'gk:theme';
+function loadTheme(): Theme {
+  try {
+    return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
 
 export interface PaneState {
   stack: DirRef[]; // root → current; empty = nothing opened yet
@@ -175,9 +185,11 @@ interface ExplorerStore {
   toast: { msg: string; kind: ToastKind } | null;
   folderPrefs: Record<string, FolderPref>;
   folderTags: Record<string, FolderTags>;
+  theme: Theme;
 
   init: () => Promise<void>;
   notify: (msg: string, kind?: ToastKind) => void;
+  setTheme: (theme: Theme) => void;
 
   // ── Folder customization ──
   setFolderPref: (key: string, pref: FolderPref) => void;
@@ -277,6 +289,7 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     toast: null,
     folderPrefs: {},
     folderTags: {},
+    theme: loadTheme(),
 
     init: async () => {
       const adapter = getAdapter();
@@ -286,6 +299,15 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       await adapter.ensureAccess().catch(() => false);
       const roots = await adapter.roots().catch(() => []);
       set({ roots });
+    },
+
+    setTheme: (theme) => {
+      try {
+        localStorage.setItem(THEME_KEY, theme);
+      } catch {
+        /* storage unavailable — keep in-memory only */
+      }
+      set({ theme });
     },
 
     notify: (msg, kind = 'info') => {
@@ -353,7 +375,7 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         h,
         z: zTop + 1,
         minimized: false,
-        maximized: phone, // phones open maximized; restore reveals the floating box
+        maximized: false, // opens as a floating box over the wallpaper; Maximize fills the screen
         collapsed: null,
         splitter: 0.5,
         staged: [],

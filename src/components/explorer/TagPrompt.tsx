@@ -82,8 +82,8 @@ export const TagPrompt: React.FC<Props> = ({ title, initial, vocab, saveLabel, s
                     {tags[axis].map((v) => (
                       <span
                         key={v}
-                        className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] border"
-                        style={{ borderColor: `${meta.color}66`, background: `${meta.color}1f`, color: '#e2e8f0' }}
+                        className="flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full text-[11px] border text-ghost-text"
+                        style={{ borderColor: `${meta.color}66`, background: `${meta.color}1f` }}
                       >
                         {v}
                         <button

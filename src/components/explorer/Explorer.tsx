@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { useExplorer } from '../../store/explorerStore';
 import { StagedFilesPane } from './StagedFilesPane';
@@ -73,11 +73,18 @@ export const Explorer: React.FC = () => {
   const win = useExplorer((s) => s.windows[0]);
   const toast = useExplorer((s) => s.toast);
   const init = useExplorer((s) => s.init);
+  const theme = useExplorer((s) => s.theme);
   const bodyRef = useRef<HTMLDivElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     init();
   }, [init]);
+
+  // Apply the chosen theme by toggling the light-theme class on <html>.
+  useEffect(() => {
+    document.documentElement.classList.toggle('theme-light', theme === 'light');
+  }, [theme]);
 
   const store = useExplorer.getState;
 
@@ -148,6 +155,9 @@ export const Explorer: React.FC = () => {
           <span className="text-[12px] font-semibold text-ghost-text tracking-wide truncate">Ghost Key</span>
           <span className="text-[10px] text-ghost-muted ml-0.5 hidden sm:inline">File Explorer</span>
           <div className="flex-1" />
+          <WinBtn title="Settings" onClick={() => setSettingsOpen((o) => !o)}>
+            <Icon name="settings" size={14} />
+          </WinBtn>
           <WinBtn title="Minimize" onClick={() => store().minimize(win.id)}>
             <Icon name="minus" size={15} />
           </WinBtn>
@@ -155,6 +165,30 @@ export const Explorer: React.FC = () => {
             <Icon name={win.maximized ? 'restore' : 'square'} size={13} />
           </WinBtn>
         </div>
+
+        {/* Settings popover */}
+        {settingsOpen && (
+          <>
+            <div className="absolute inset-0 z-30" onClick={() => setSettingsOpen(false)} />
+            <div className="absolute right-2 top-11 z-40 w-44 rounded-xl border border-ghost-border bg-ghost-surface shadow-2xl glass p-3 animate-fade-in">
+              <div className="text-[10px] uppercase tracking-wider text-ghost-muted mb-2">Theme</div>
+              <div className="flex w-full rounded-lg overflow-hidden border border-ghost-border text-[12px]">
+                <button
+                  onClick={() => store().setTheme('light')}
+                  className={`flex-1 px-2 py-1.5 ${theme === 'light' ? 'bg-ghost-accent/25 text-ghost-text font-medium' : 'text-ghost-muted hover:bg-ghost-card'}`}
+                >
+                  Light
+                </button>
+                <button
+                  onClick={() => store().setTheme('dark')}
+                  className={`flex-1 px-2 py-1.5 border-l border-ghost-border ${theme === 'dark' ? 'bg-ghost-accent/25 text-ghost-text font-medium' : 'text-ghost-muted hover:bg-ghost-card'}`}
+                >
+                  Dark
+                </button>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Body: files on top, folder picker below */}
         <div ref={bodyRef} className="flex-1 flex flex-col min-h-0">

@@ -110,6 +110,14 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
   const openStagePrompt = (entry: DirEntry) => setPrompt({ entry, key: tagKeyOf(entry), mode: 'stage' });
   const openEditPrompt = (entry: DirEntry) => setPrompt({ entry, key: tagKeyOf(entry), mode: 'edit' });
 
+  // Tapping a folder opens it. The who/what/when/where prompt only pops for a
+  // NEW (untagged) folder; ones already filed open straight to their files.
+  const openFolder = (entry: DirEntry) => {
+    const existing = folderTags[tagKeyOf(entry)];
+    if (existing && !tagsAreEmpty(existing)) s().stageFolder(winId, entry);
+    else openStagePrompt(entry);
+  };
+
   const handleSave = (tags: FolderTags) => {
     if (!prompt) return;
     s().setFolderTags(prompt.key, tags);
@@ -329,8 +337,8 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
                     }`}
                   >
                     <button
-                      onClick={() => openStagePrompt(entry)}
-                      title={isStaged ? `${entry.name} (staged) — tap to view its files` : `File & stage ${entry.name}`}
+                      onClick={() => openFolder(entry)}
+                      title={isStaged ? `${entry.name} (staged) — tap to view its files` : `Open ${entry.name}`}
                       className="flex flex-col gap-1 flex-1 min-w-0 text-left pt-0.5"
                     >
                       <span className="flex items-center gap-2 min-w-0">
@@ -395,7 +403,7 @@ const FolderStagingPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
             className="fixed z-50 min-w-[170px] py-1 rounded-lg border border-ghost-border bg-ghost-surface shadow-2xl glass animate-fade-in"
             style={{ left: Math.min(menu.x, window.innerWidth - 190), top: Math.min(menu.y, window.innerHeight - 170) }}
           >
-            <MenuItem icon="folderOpen" label="Open / stage" onClick={() => { openStagePrompt(menu.entry); setMenu(null); }} />
+            <MenuItem icon="folderOpen" label="Open / stage" onClick={() => { openFolder(menu.entry); setMenu(null); }} />
             <MenuItem icon="chevronRight" label="Browse inside" onClick={() => { s().enterDir(winId, 'right', menu.entry); setMenu(null); }} />
             <MenuItem icon="tag" label="Edit tags" onClick={() => { openEditPrompt(menu.entry); setMenu(null); }} />
             <MenuItem icon="pencil" label="Rename" onClick={() => { const en = menu.entry; setMenu(null); renameFolder(en); }} />

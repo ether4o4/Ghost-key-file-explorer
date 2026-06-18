@@ -7,22 +7,24 @@ export default {
   theme: {
     extend: {
       colors: {
+        // Driven by CSS variables (RGB channels) so the whole palette switches
+        // with the light/dark theme class on <html>. See index.css.
         ghost: {
-          bg: '#0a0b0e',
-          surface: '#111318',
-          card: '#1a1d24',
-          border: '#252830',
-          accent: '#6c63ff',
-          accentDim: '#4a44b5',
-          cyan: '#00d4ff',
-          green: '#00ff88',
-          orange: '#ff6b35',
-          red: '#ff3355',
-          yellow: '#ffd700',
-          text: '#e2e8f0',
-          muted: '#64748b',
-          dim: '#374151',
-        }
+          bg: 'rgb(var(--ghost-bg) / <alpha-value>)',
+          surface: 'rgb(var(--ghost-surface) / <alpha-value>)',
+          card: 'rgb(var(--ghost-card) / <alpha-value>)',
+          border: 'rgb(var(--ghost-border) / <alpha-value>)',
+          accent: 'rgb(var(--ghost-accent) / <alpha-value>)',
+          accentDim: 'rgb(var(--ghost-accentDim) / <alpha-value>)',
+          cyan: 'rgb(var(--ghost-cyan) / <alpha-value>)',
+          green: 'rgb(var(--ghost-green) / <alpha-value>)',
+          orange: 'rgb(var(--ghost-orange) / <alpha-value>)',
+          red: 'rgb(var(--ghost-red) / <alpha-value>)',
+          yellow: 'rgb(var(--ghost-yellow) / <alpha-value>)',
+          text: 'rgb(var(--ghost-text) / <alpha-value>)',
+          muted: 'rgb(var(--ghost-muted) / <alpha-value>)',
+          dim: 'rgb(var(--ghost-dim) / <alpha-value>)',
+        },
       },
       fontFamily: {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],

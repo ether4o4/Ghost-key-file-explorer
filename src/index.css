@@ -4,7 +4,43 @@
 @tailwind components;
 @tailwind utilities;
 
-:root { color-scheme: dark; }
+:root {
+  color-scheme: dark;
+  /* Dark theme (default) — RGB channels consumed by Tailwind's ghost-* colors. */
+  --ghost-bg: 10 11 14;
+  --ghost-surface: 17 19 24;
+  --ghost-card: 26 29 36;
+  --ghost-border: 37 40 48;
+  --ghost-accent: 108 99 255;
+  --ghost-accentDim: 74 68 181;
+  --ghost-cyan: 0 212 255;
+  --ghost-green: 0 255 136;
+  --ghost-orange: 255 107 53;
+  --ghost-red: 255 51 85;
+  --ghost-yellow: 255 215 0;
+  --ghost-text: 226 232 240;
+  --ghost-muted: 100 116 139;
+  --ghost-dim: 55 65 81;
+}
+
+/* Light theme — applied by toggling `theme-light` on <html>. */
+.theme-light {
+  color-scheme: light;
+  --ghost-bg: 248 249 251;
+  --ghost-surface: 255 255 255;
+  --ghost-card: 237 240 245;
+  --ghost-border: 214 219 227;
+  --ghost-accent: 99 91 240;
+  --ghost-accentDim: 124 117 245;
+  --ghost-cyan: 8 145 178;
+  --ghost-green: 5 150 105;
+  --ghost-orange: 234 88 12;
+  --ghost-red: 220 38 38;
+  --ghost-yellow: 202 138 4;
+  --ghost-text: 17 24 39;
+  --ghost-muted: 100 116 139;
+  --ghost-dim: 148 163 184;
+}
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -34,7 +70,7 @@ html, body, #root {
 
 .sku-badge { font-family: 'JetBrains Mono', monospace; letter-spacing: 0.05em; }
 
-.glass { background: rgba(26,29,36,0.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.glass { background: rgb(var(--ghost-surface) / 0.78); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 
 @keyframes scanline { 0% { top: 0; } 100% { top: 100%; } }
 .scanline { position: absolute; width: 100%; height: 2px; background: linear-gradient(90deg, transparent, rgba(0,255,136,0.3), transparent); animation: scanline 3s linear infinite; pointer-events: none; }
