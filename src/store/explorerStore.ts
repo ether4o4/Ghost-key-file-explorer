@@ -53,6 +53,9 @@ export interface WindowState {
   // (panes.left) shows the files of whichever staged folder is active.
   staged: DirRef[]; // picked working folders (max 5), in pick order
   activeStaged: number | null; // index into `staged` whose files fill the top deck
+  // Navigation history for the TOP deck (the contents view) — drives back/forward.
+  topHistory: DirRef[][]; // each entry is a full stack (root → folder shown up top)
+  topIndex: number; // position within topHistory; -1 = nothing opened yet
   panes: Record<Side, PaneState>;
   restore?: { x: number; y: number; w: number; h: number };
 }
@@ -243,6 +246,13 @@ interface ExplorerStore {
   activateStaged: (id: number, idx: number) => Promise<void>; // make a staged folder active
   unstageFolder: (id: number, idx: number) => void; // drop a folder from the tray
   moveTopSelectionTo: (id: number, targetIdx: number, copy: boolean) => Promise<void>; // top files → staged folder
+
+  // ── Top-deck navigation (the contents view) ──
+  drillTop: (id: number, entry: DirEntry) => Promise<void>; // open a subfolder shown up top
+  topUp: (id: number) => Promise<void>;
+  topBreadcrumb: (id: number, index: number) => Promise<void>;
+  topBack: (id: number) => Promise<void>;
+  topForward: (id: number) => Promise<void>;
 }
 
 // Maximum number of folders that can be staged to work in at once.
@@ -265,6 +275,24 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
   const currentDir = (id: number, side: Side): DirRef | undefined => {
     const p = getPane(id, side);
     return p && p.stack.length ? p.stack[p.stack.length - 1] : undefined;
+  };
+
+  const sameStack = (a: DirRef[], b: DirRef[]): boolean =>
+    a.length === b.length && (a.length === 0 || sameDir(a[a.length - 1], b[b.length - 1]));
+
+  // Push a new top-deck location onto the history (truncating any forward entries).
+  const recordTop = (id: number, stack: DirRef[]) => {
+    const win = get().windows.find((w) => w.id === id);
+    if (!win) return;
+    const hist = win.topHistory.slice(0, win.topIndex + 1);
+    const last = hist[hist.length - 1];
+    if (!last || !sameStack(last, stack)) hist.push(stack);
+    patchWindow(id, (w) => ({ ...w, topHistory: hist, topIndex: hist.length - 1 }));
+  };
+
+  const topNavigate = async (id: number, stack: DirRef[]) => {
+    await loadInto(id, 'left', stack);
+    recordTop(id, stack);
   };
 
   const loadInto = async (id: number, side: Side, stack: DirRef[]) => {
@@ -380,6 +408,8 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         splitter: 0.5,
         staged: [],
         activeStaged: null,
+        topHistory: [],
+        topIndex: -1,
         panes: { left: emptyPane(), right: emptyPane() },
       };
       set({ windows: [...windows, win], nextId: nextId + 1, zTop: zTop + 1 });
@@ -641,14 +671,14 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         patchWindow(id, (w) => ({ ...w, staged }));
       }
       patchWindow(id, (w) => ({ ...w, activeStaged: idx }));
-      await loadInto(id, 'left', [ref]);
+      await topNavigate(id, [ref]);
     },
 
     activateStaged: async (id, idx) => {
       const win = get().windows.find((w) => w.id === id);
       if (!win || idx < 0 || idx >= win.staged.length) return;
       patchWindow(id, (w) => ({ ...w, activeStaged: idx }));
-      await loadInto(id, 'left', [win.staged[idx]]);
+      await topNavigate(id, [win.staged[idx]]);
     },
 
     unstageFolder: (id, idx) => {
@@ -659,7 +689,12 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const clearedActive = activeStaged === idx;
       if (clearedActive) activeStaged = null;
       else if (activeStaged !== null && activeStaged > idx) activeStaged -= 1;
-      patchWindow(id, (w) => ({ ...w, staged, activeStaged }));
+      patchWindow(id, (w) => ({
+        ...w,
+        staged,
+        activeStaged,
+        ...(clearedActive ? { topHistory: [], topIndex: -1 } : {}),
+      }));
       // If we removed the folder currently shown up top, blank the top deck.
       if (clearedActive) {
         patchPane(id, 'left', { stack: [], entries: [], selected: [], error: null });
@@ -697,6 +732,43 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       } finally {
         await get().refresh(id, 'left');
       }
+    },
+
+    // ── Top-deck navigation (the contents view) ──
+    drillTop: async (id, entry) => {
+      if (entry.kind !== 'directory') return;
+      const win = get().windows.find((w) => w.id === id);
+      if (!win) return;
+      await topNavigate(id, [...win.panes.left.stack, get().adapter.enter(entry)]);
+    },
+
+    topUp: async (id) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win || win.panes.left.stack.length <= 1) return;
+      await topNavigate(id, win.panes.left.stack.slice(0, -1));
+    },
+
+    topBreadcrumb: async (id, index) => {
+      const win = get().windows.find((w) => w.id === id);
+      const stack = win?.panes.left.stack;
+      if (!stack || index < 0 || index >= stack.length) return;
+      await topNavigate(id, stack.slice(0, index + 1));
+    },
+
+    topBack: async (id) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win || win.topIndex <= 0) return;
+      const idx = win.topIndex - 1;
+      patchWindow(id, (w) => ({ ...w, topIndex: idx }));
+      await loadInto(id, 'left', win.topHistory[idx]);
+    },
+
+    topForward: async (id) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win || win.topIndex >= win.topHistory.length - 1) return;
+      const idx = win.topIndex + 1;
+      patchWindow(id, (w) => ({ ...w, topIndex: idx }));
+      await loadInto(id, 'left', win.topHistory[idx]);
     },
 
     sendSelection: async (id, side, copy) => {
