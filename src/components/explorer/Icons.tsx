@@ -41,6 +41,7 @@ type IconName =
   | 'filter'
   | 'more'
   | 'settings'
+  | 'info'
   | 'search';
 
 const PATHS: Record<IconName, React.ReactNode> = {
@@ -148,6 +149,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   filter: <path d="M22 4H2l8 9v7l4-2v-5z" />,
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5M12 7.5h.01" />
+    </>
+  ),
   more: (
     <>
       <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />

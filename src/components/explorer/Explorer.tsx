@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { useExplorer } from '../../store/explorerStore';
 import { StagedFilesPane } from './StagedFilesPane';
 import { FolderStagingPane } from './FolderStagingPane';
+import { AppManager } from '../apps/AppManager';
 import { Icon } from './Icons';
 
 /**
@@ -76,6 +77,7 @@ export const Explorer: React.FC = () => {
   const theme = useExplorer((s) => s.theme);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [view, setView] = useState<'files' | 'apps'>('files');
 
   useEffect(() => {
     init();
@@ -153,7 +155,18 @@ export const Explorer: React.FC = () => {
         >
           <span className="text-base leading-none">👻</span>
           <span className="text-[12px] font-semibold text-ghost-text tracking-wide truncate">Ghost Key</span>
-          <span className="text-[10px] text-ghost-muted ml-0.5 hidden sm:inline">File Explorer</span>
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setView((v) => (v === 'apps' ? 'files' : 'apps'));
+            }}
+            title={view === 'apps' ? 'File explorer' : 'App manager'}
+            className="ml-2 flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-ghost-muted hover:text-ghost-text hover:bg-ghost-card transition-colors"
+          >
+            <Icon name={view === 'apps' ? 'folderOpen' : 'grid'} size={13} />
+            <span className="hidden sm:inline">{view === 'apps' ? 'Files' : 'Apps'}</span>
+          </button>
           <div className="flex-1" />
           <WinBtn title="Settings" onClick={() => setSettingsOpen((o) => !o)}>
             <Icon name="settings" size={14} />
@@ -190,23 +203,29 @@ export const Explorer: React.FC = () => {
           </>
         )}
 
-        {/* Body: files on top, folder picker below */}
-        <div ref={bodyRef} className="flex-1 flex flex-col min-h-0">
-          <div style={{ flexBasis: topPct }} className="min-h-0 overflow-hidden shrink-0 grow-0">
-            <StagedFilesPane winId={win.id} />
-          </div>
-          <div
-            onPointerDown={startSplit}
-            onDoubleClick={() => store().setSplitter(win.id, 0.5)}
-            title="Drag to resize · double-tap to even out"
-            className="group shrink-0 h-2.5 w-full cursor-row-resize flex items-center justify-center bg-ghost-border hover:bg-ghost-accent/60 transition-colors"
-          >
-            <span className="rounded-full bg-ghost-dim group-hover:bg-ghost-text h-[3px] w-10 transition-colors" />
-          </div>
+        {/* Body: App Manager, or the files/folders staging decks */}
+        {view === 'apps' ? (
           <div className="flex-1 min-h-0 overflow-hidden">
-            <FolderStagingPane winId={win.id} />
+            <AppManager />
           </div>
-        </div>
+        ) : (
+          <div ref={bodyRef} className="flex-1 flex flex-col min-h-0">
+            <div style={{ flexBasis: topPct }} className="min-h-0 overflow-hidden shrink-0 grow-0">
+              <StagedFilesPane winId={win.id} />
+            </div>
+            <div
+              onPointerDown={startSplit}
+              onDoubleClick={() => store().setSplitter(win.id, 0.5)}
+              title="Drag to resize · double-tap to even out"
+              className="group shrink-0 h-2.5 w-full cursor-row-resize flex items-center justify-center bg-ghost-border hover:bg-ghost-accent/60 transition-colors"
+            >
+              <span className="rounded-full bg-ghost-dim group-hover:bg-ghost-text h-[3px] w-10 transition-colors" />
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <FolderStagingPane winId={win.id} />
+            </div>
+          </div>
+        )}
 
         {/* Resize handle — bottom-left, opposite the min/max buttons */}
         {!win.maximized && (
