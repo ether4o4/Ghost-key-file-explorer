@@ -210,20 +210,27 @@ export const Explorer: React.FC = () => {
           </div>
         ) : (
           <div ref={bodyRef} className="flex-1 flex flex-col min-h-0">
-            <div style={{ flexBasis: topPct }} className="min-h-0 overflow-hidden shrink-0 grow-0">
+            <div
+              style={win.topFull ? undefined : { flexBasis: topPct }}
+              className={`min-h-0 overflow-hidden ${win.topFull ? 'flex-1' : 'shrink-0 grow-0'}`}
+            >
               <StagedFilesPane winId={win.id} />
             </div>
-            <div
-              onPointerDown={startSplit}
-              onDoubleClick={() => store().setSplitter(win.id, 0.5)}
-              title="Drag to resize · double-tap to even out"
-              className="group shrink-0 h-2.5 w-full cursor-row-resize flex items-center justify-center bg-ghost-border hover:bg-ghost-accent/60 transition-colors"
-            >
-              <span className="rounded-full bg-ghost-dim group-hover:bg-ghost-text h-[3px] w-10 transition-colors" />
-            </div>
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <FolderStagingPane winId={win.id} />
-            </div>
+            {!win.topFull && (
+              <>
+                <div
+                  onPointerDown={startSplit}
+                  onDoubleClick={() => store().setSplitter(win.id, 0.5)}
+                  title="Drag to resize · double-tap to even out"
+                  className="group shrink-0 h-2.5 w-full cursor-row-resize flex items-center justify-center bg-ghost-border hover:bg-ghost-accent/60 transition-colors"
+                >
+                  <span className="rounded-full bg-ghost-dim group-hover:bg-ghost-text h-[3px] w-10 transition-colors" />
+                </div>
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <FolderStagingPane winId={win.id} />
+                </div>
+              </>
+            )}
           </div>
         )}
 

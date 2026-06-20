@@ -5,6 +5,7 @@ import type { DirEntry } from '../../core/fs';
 import { formatBytes, formatDate } from '../../utils/format';
 import { Icon, entryIcon } from './Icons';
 import type { IconName } from './Icons';
+import { FileViewer } from './FileViewer';
 
 /**
  * Top deck = the CONTENTS view. It stays blank until you click a folder below,
@@ -41,6 +42,9 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
 
   if (!win || !pane) return null;
 
+  // A file opened in-place takes over the whole top deck.
+  if (win.preview) return <FileViewer key={win.preview.uri ?? win.preview.name} winId={winId} entry={win.preview} />;
+
   const hasFolder = pane.stack.length > 0;
   const selected = pane.selected;
   const curRef = hasFolder ? pane.stack[pane.stack.length - 1] : undefined;
@@ -62,7 +66,7 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
     s().setSelected(winId, 'left', [...cur]);
   };
 
-  const openFile = (entry: DirEntry) => s().openFile(winId, 'left', entry);
+  const openInViewer = (entry: DirEntry) => s().openPreview(winId, entry);
 
   const renameOne = () => {
     const entry = entries.find((f) => f.name === selected[0]);
@@ -125,6 +129,11 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
           <option value="kind">Type</option>
         </select>
         <IconBtn name="refresh" title="Refresh" onClick={() => s().refresh(winId, 'left')} />
+        <IconBtn
+          name={win.topFull ? 'collapse' : 'expand'}
+          title={win.topFull ? 'Restore panel' : 'Fullscreen panel'}
+          onClick={() => s().setTopFull(winId, !win.topFull)}
+        />
       </div>
 
       {searchOpen && (
@@ -180,7 +189,7 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
                   e.stopPropagation();
                   toggle(entry.name);
                 }}
-                onDoubleClick={() => openFile(entry)}
+                onDoubleClick={() => openInViewer(entry)}
                 title={entry.name}
                 className={`flex items-center gap-2.5 px-3 py-2 cursor-default select-none border-b border-ghost-border/40 transition-colors ${
                   isSel ? 'bg-ghost-accent/20' : 'hover:bg-ghost-card'
@@ -198,7 +207,7 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    openFile(entry);
+                    openInViewer(entry);
                   }}
                   title="Open file"
                   className="shrink-0 p-1 rounded text-ghost-muted hover:text-ghost-text hover:bg-ghost-surface"
@@ -227,7 +236,7 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
                 <button
                   onClick={() => {
                     const entry = entries.find((f) => f.name === selected[0]);
-                    if (entry) openFile(entry);
+                    if (entry) openInViewer(entry);
                   }}
                   className="px-2 py-1 rounded-md bg-ghost-card border border-ghost-border text-ghost-text hover:border-ghost-accent/50"
                 >

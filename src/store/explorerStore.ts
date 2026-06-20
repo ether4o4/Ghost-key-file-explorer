@@ -56,6 +56,8 @@ export interface WindowState {
   // Navigation history for the TOP deck (the contents view) — drives back/forward.
   topHistory: DirRef[][]; // each entry is a full stack (root → folder shown up top)
   topIndex: number; // position within topHistory; -1 = nothing opened yet
+  preview: DirEntry | null; // a file opened in-place in the top deck (null = file list)
+  topFull: boolean; // top deck expanded to fill the whole window
   panes: Record<Side, PaneState>;
   restore?: { x: number; y: number; w: number; h: number };
 }
@@ -253,6 +255,11 @@ interface ExplorerStore {
   topBreadcrumb: (id: number, index: number) => Promise<void>;
   topBack: (id: number) => Promise<void>;
   topForward: (id: number) => Promise<void>;
+
+  // ── In-place file viewer ──
+  openPreview: (id: number, entry: DirEntry) => void; // show a file inside the top deck
+  closePreview: (id: number) => void; // back to the file list
+  setTopFull: (id: number, full: boolean) => void; // expand the top deck to full window
 }
 
 // Maximum number of folders that can be staged to work in at once.
@@ -297,6 +304,8 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
 
   const loadInto = async (id: number, side: Side, stack: DirRef[]) => {
     const dir = stack[stack.length - 1];
+    // Navigating the top deck closes any in-place file preview.
+    if (side === 'left') patchWindow(id, (w) => ({ ...w, preview: null }));
     patchPane(id, side, { loading: true, error: null, stack, selected: [] });
     try {
       const entries = await get().adapter.list(dir);
@@ -410,6 +419,8 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         activeStaged: null,
         topHistory: [],
         topIndex: -1,
+        preview: null,
+        topFull: false,
         panes: { left: emptyPane(), right: emptyPane() },
       };
       set({ windows: [...windows, win], nextId: nextId + 1, zTop: zTop + 1 });
@@ -770,6 +781,14 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       patchWindow(id, (w) => ({ ...w, topIndex: idx }));
       await loadInto(id, 'left', win.topHistory[idx]);
     },
+
+    // ── In-place file viewer ──
+    openPreview: (id, entry) => {
+      if (entry.kind !== 'file') return;
+      patchWindow(id, (w) => ({ ...w, preview: entry }));
+    },
+    closePreview: (id) => patchWindow(id, (w) => ({ ...w, preview: null })),
+    setTopFull: (id, full) => patchWindow(id, (w) => ({ ...w, topFull: full })),
 
     sendSelection: async (id, side, copy) => {
       const otherSide: Side = side === 'left' ? 'right' : 'left';
