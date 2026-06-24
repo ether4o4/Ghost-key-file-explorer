@@ -41,24 +41,58 @@ export const AppManager: React.FC = () => {
   const [busy, setBusy] = useState<string | null>(null); // packageName mid-action
   const [loadedAt, setLoadedAt] = useState(0); // wall-clock at last successful load
 
+  const loadId = React.useRef(0);
+
+  // After the fast metadata list renders, stream icons (+ sizes) in batches so
+  // the view is usable immediately instead of blocking on hundreds of icons.
+  const enrich = React.useCallback(async (pkgs: string[], usage: boolean, myId: number) => {
+    const BATCH = 36;
+    for (let i = 0; i < pkgs.length; i += BATCH) {
+      if (loadId.current !== myId) return;
+      let r;
+      try {
+        r = await Native.getDetails({ packageNames: pkgs.slice(i, i + BATCH), icons: true, sizes: usage });
+      } catch {
+        continue;
+      }
+      if (loadId.current !== myId) return;
+      const map = new Map(r.details.map((d) => [d.packageName, d]));
+      setApps((prev) =>
+        prev.map((a) => {
+          const d = map.get(a.packageName);
+          if (!d) return a;
+          return {
+            ...a,
+            icon: d.icon ?? a.icon,
+            sizeBytes: typeof d.sizeBytes === 'number' && d.sizeBytes >= 0 ? d.sizeBytes : a.sizeBytes,
+          };
+        }),
+      );
+    }
+  }, []);
+
   const load = React.useCallback(async () => {
     if (!appManagerAvailable()) {
       setLoading(false);
       return;
     }
+    const myId = ++loadId.current;
     setLoading(true);
     setError(null);
     try {
-      const res = await Native.listApps({ includeSystem, icons: true });
+      const res = await Native.listApps({ includeSystem, icons: false });
+      if (loadId.current !== myId) return;
       setApps(res.apps);
       setUsageAccess(res.usageAccess);
       setLoadedAt(Date.now());
+      setLoading(false);
+      void enrich(res.apps.map((a) => a.packageName), res.usageAccess, myId);
     } catch (e) {
+      if (loadId.current !== myId) return;
       setError(e instanceof Error ? e.message : 'Could not read installed apps');
-    } finally {
       setLoading(false);
     }
-  }, [includeSystem]);
+  }, [includeSystem, enrich]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch-on-mount; setState happens via the async load

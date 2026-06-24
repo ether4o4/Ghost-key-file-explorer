@@ -16,10 +16,17 @@ export interface AppEntry {
   icon?: string; // data: URL, may be empty
 }
 
+export interface AppDetail {
+  packageName: string;
+  icon?: string;
+  sizeBytes?: number;
+}
+
 export interface AppManagerPlugin {
   hasUsageAccess(): Promise<{ granted: boolean }>;
   openUsageAccessSettings(): Promise<void>;
-  listApps(options?: { includeSystem?: boolean; icons?: boolean }): Promise<{ apps: AppEntry[]; usageAccess: boolean }>;
+  listApps(options?: { includeSystem?: boolean; icons?: boolean; sizes?: boolean }): Promise<{ apps: AppEntry[]; usageAccess: boolean }>;
+  getDetails(options: { packageNames: string[]; icons?: boolean; sizes?: boolean }): Promise<{ details: AppDetail[] }>;
   uninstall(options: { packageName: string }): Promise<void>;
   openAppInfo(options: { packageName: string }): Promise<void>;
   launchApp(options: { packageName: string }): Promise<void>;

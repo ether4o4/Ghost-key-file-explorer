@@ -62,13 +62,14 @@ public class AppManagerPlugin extends Plugin {
     @PluginMethod
     public void listApps(PluginCall call) {
         boolean includeSystem = Boolean.TRUE.equals(call.getBoolean("includeSystem", false));
-        boolean withIcons = Boolean.TRUE.equals(call.getBoolean("icons", true));
+        boolean withIcons = Boolean.TRUE.equals(call.getBoolean("icons", false));
+        boolean withSizes = Boolean.TRUE.equals(call.getBoolean("sizes", false));
         Context ctx = getContext();
         PackageManager pm = ctx.getPackageManager();
 
         Map<String, UsageStats> usage = queryUsage(ctx);
         StorageStatsManager ssm = null;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && hasUsageStatsPermission()) {
+        if (withSizes && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && hasUsageStatsPermission()) {
             ssm = (StorageStatsManager) ctx.getSystemService(Context.STORAGE_STATS_SERVICE);
         }
 
@@ -119,6 +120,55 @@ public class AppManagerPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("apps", apps);
         ret.put("usageAccess", hasUsageStatsPermission());
+        call.resolve(ret);
+    }
+
+    /** Batched enrichment: icons (and sizes, if usage access) for given packages. */
+    @PluginMethod
+    public void getDetails(PluginCall call) {
+        JSArray arr = call.getArray("packageNames");
+        boolean wantIcons = Boolean.TRUE.equals(call.getBoolean("icons", true));
+        boolean wantSizes = Boolean.TRUE.equals(call.getBoolean("sizes", false));
+        Context ctx = getContext();
+        PackageManager pm = ctx.getPackageManager();
+        StorageStatsManager ssm = null;
+        if (wantSizes && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && hasUsageStatsPermission()) {
+            ssm = (StorageStatsManager) ctx.getSystemService(Context.STORAGE_STATS_SERVICE);
+        }
+
+        JSArray out = new JSArray();
+        if (arr != null) {
+            for (int i = 0; i < arr.length(); i++) {
+                String pkg = arr.optString(i, null);
+                if (pkg == null || pkg.isEmpty()) continue;
+                JSObject o = new JSObject();
+                o.put("packageName", pkg);
+                try {
+                    ApplicationInfo ai = pm.getApplicationInfo(pkg, 0);
+                    if (wantIcons) {
+                        try {
+                            o.put("icon", drawableToBase64(pm.getApplicationIcon(ai)));
+                        } catch (Exception ignored) {
+                            // icon unavailable
+                        }
+                    }
+                    if (ssm != null) {
+                        try {
+                            StorageStats st = ssm.queryStatsForPackage(ai.storageUuid, pkg, Process.myUserHandle());
+                            o.put("sizeBytes", st.getAppBytes() + st.getDataBytes() + st.getCacheBytes());
+                        } catch (Exception ignored) {
+                            // size unavailable
+                        }
+                    }
+                } catch (Exception ignored) {
+                    // package vanished (e.g. just uninstalled) — return bare entry
+                }
+                out.put(o);
+            }
+        }
+
+        JSObject ret = new JSObject();
+        ret.put("details", out);
         call.resolve(ret);
     }
 
