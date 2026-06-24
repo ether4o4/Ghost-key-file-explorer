@@ -181,12 +181,19 @@ public class AppManagerPlugin extends Plugin {
 
     private boolean hasUsageStatsPermission() {
         try {
-            AppOpsManager appOps = (AppOpsManager) getContext().getSystemService(Context.APP_OPS_SERVICE);
+            Context ctx = getContext();
+            AppOpsManager appOps = (AppOpsManager) ctx.getSystemService(Context.APP_OPS_SERVICE);
             int mode;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                mode = appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), getContext().getPackageName());
+                mode = appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), ctx.getPackageName());
             } else {
-                mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), getContext().getPackageName());
+                mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), ctx.getPackageName());
+            }
+            // On many devices the app-op stays MODE_DEFAULT after the user grants
+            // Usage Access — fall back to the actual permission grant so we don't
+            // keep re-prompting for an access that's already on.
+            if (mode == AppOpsManager.MODE_DEFAULT) {
+                return ctx.checkCallingOrSelfPermission(android.Manifest.permission.PACKAGE_USAGE_STATS) == PackageManager.PERMISSION_GRANTED;
             }
             return mode == AppOpsManager.MODE_ALLOWED;
         } catch (Exception e) {
