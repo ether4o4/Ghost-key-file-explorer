@@ -8,12 +8,30 @@
 import { create } from 'zustand';
 import { getAdapter } from '../core/fs';
 import type { DirEntry, DirRef, FsAdapter, RootShortcut } from '../core/fs';
+import type { SandboxSession } from '../core/archive';
 
 export type Side = 'left' | 'right';
 export type ViewMode = 'list' | 'grid';
 export type SortKey = 'name' | 'size' | 'mtime' | 'kind';
 export type ToastKind = 'info' | 'success' | 'error';
 export type Theme = 'light' | 'dark';
+
+const SANDBOX_KEY = 'gk:sandbox';
+function loadSandbox(): SandboxSession[] {
+  try {
+    const raw = localStorage.getItem(SANDBOX_KEY);
+    return raw ? (JSON.parse(raw) as SandboxSession[]) : [];
+  } catch {
+    return [];
+  }
+}
+function saveSandbox(sessions: SandboxSession[]): void {
+  try {
+    localStorage.setItem(SANDBOX_KEY, JSON.stringify(sessions));
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 const THEME_KEY = 'gk:theme';
 function loadTheme(): Theme {
@@ -260,6 +278,12 @@ interface ExplorerStore {
   openPreview: (id: number, entry: DirEntry) => void; // show a file inside the top deck
   closePreview: (id: number) => void; // back to the file list
   setTopFull: (id: number, full: boolean) => void; // expand the top deck to full window
+
+  // ── Archive sandbox (Limbo) ──
+  sandboxSessions: SandboxSession[];
+  addSandbox: (session: SandboxSession) => void;
+  removeSandbox: (id: string) => void;
+  openTopRef: (id: number, ref: DirRef) => Promise<void>; // open a raw folder ref in the top deck
 }
 
 // Maximum number of folders that can be staged to work in at once.
@@ -326,12 +350,13 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     toast: null,
     folderPrefs: {},
     folderTags: {},
+    sandboxSessions: [],
     theme: loadTheme(),
 
     init: async () => {
       const adapter = getAdapter();
       // Show the explorer immediately, then fill in storage access + roots.
-      set({ adapter, folderPrefs: loadPrefs(), folderTags: loadTags() });
+      set({ adapter, folderPrefs: loadPrefs(), folderTags: loadTags(), sandboxSessions: loadSandbox() });
       if (get().windows.length === 0) get().newWindow();
       await adapter.ensureAccess().catch(() => false);
       const roots = await adapter.roots().catch(() => []);
@@ -780,6 +805,22 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const idx = win.topIndex + 1;
       patchWindow(id, (w) => ({ ...w, topIndex: idx }));
       await loadInto(id, 'left', win.topHistory[idx]);
+    },
+
+    openTopRef: async (id, ref) => {
+      await topNavigate(id, [ref]);
+    },
+
+    // ── Archive sandbox (Limbo) ──
+    addSandbox: (session) => {
+      const next = [session, ...get().sandboxSessions.filter((s) => s.id !== session.id)];
+      saveSandbox(next);
+      set({ sandboxSessions: next });
+    },
+    removeSandbox: (id) => {
+      const next = get().sandboxSessions.filter((s) => s.id !== id);
+      saveSandbox(next);
+      set({ sandboxSessions: next });
     },
 
     // ── In-place file viewer ──

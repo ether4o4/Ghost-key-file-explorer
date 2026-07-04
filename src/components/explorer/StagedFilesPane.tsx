@@ -6,6 +6,7 @@ import { formatBytes, formatDate } from '../../utils/format';
 import { Icon, entryIcon } from './Icons';
 import type { IconName } from './Icons';
 import { FileViewer } from './FileViewer';
+import { SandboxBar } from './SandboxBar';
 
 /**
  * Top deck = the CONTENTS view. It stays blank until you click a folder below,
@@ -147,6 +148,8 @@ const StagedFilesPaneInner: React.FC<{ winId: number }> = ({ winId }) => {
           />
         </div>
       )}
+
+      <SandboxBar winId={winId} currentUri={curRef?.uri} />
 
       <div className="flex-1 overflow-auto" onClick={() => s().setSelected(winId, 'left', [])}>
         {pane.loading && <div className="p-4 text-center text-ghost-muted text-xs">Loading…</div>}

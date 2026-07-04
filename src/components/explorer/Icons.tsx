@@ -42,6 +42,7 @@ type IconName =
   | 'more'
   | 'settings'
   | 'info'
+  | 'magnet'
   | 'search';
 
 const PATHS: Record<IconName, React.ReactNode> = {
@@ -153,6 +154,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <circle cx="12" cy="12" r="9" />
       <path d="M12 11v5M12 7.5h.01" />
+    </>
+  ),
+  magnet: (
+    <>
+      <path d="M7 4H3v7a9 9 0 0 0 18 0V4h-4v7a5 5 0 0 1-10 0z" />
+      <path d="M3 8h4M17 8h4" />
     </>
   ),
   more: (
