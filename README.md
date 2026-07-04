@@ -209,12 +209,12 @@ Built to be the entry point for a full data intelligence workflow.
 ## 📲 Download the latest Android APK
 
 This link always points to the **newest build** — every push to the app refreshes it automatically
-(via the *Publish Android APK* workflow → `android-preview` release):
+(via the *Publish Android APK* workflow → `android-preview-dual-pane` release):
 
-### 👉 **[Download Ghost Key — latest APK](https://github.com/ether4o4/Ghost-key-file-explorer/releases/download/android-preview/ghost-key-file-explorer.apk)**
+### 👉 **[Download Ghost Key — latest APK](https://github.com/ether4o4/Ghost-key-file-explorer/releases/download/android-preview-dual-pane/ghost-key-dual-pane.apk)**
 
 ```
-https://github.com/ether4o4/Ghost-key-file-explorer/releases/download/android-preview/ghost-key-file-explorer.apk
+https://github.com/ether4o4/Ghost-key-file-explorer/releases/download/android-preview-dual-pane/ghost-key-dual-pane.apk
 ```
 
 > Debug-signed and installable (enable "Install unknown apps" for your browser/file manager).
