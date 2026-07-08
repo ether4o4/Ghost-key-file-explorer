@@ -11,6 +11,14 @@ interface Props {
   side: Side;
 }
 
+// Touch devices (phones/tablets) don't drive HTML5 drag-and-drop from finger
+// input — a native drag starts but never resolves, hanging the WebView. So we
+// turn off `draggable` on coarse-pointer devices and move files via the
+// selection action bar / context menu instead. Mouse drag stays on desktop.
+const IS_TOUCH =
+  typeof window !== 'undefined' &&
+  (window.matchMedia?.('(pointer: coarse)').matches || 'ontouchstart' in window);
+
 interface MenuState {
   x: number;
   y: number;
@@ -61,7 +69,6 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
   if (!pane) return null;
   const s = useExplorer.getState;
   const hasFolder = pane.stack.length > 0;
-  const otherSide: Side = side === 'left' ? 'right' : 'left';
   const stackNames = pane.stack.map((r) => r.name);
 
   // Stable per-folder key: native URI when available, else the name-path.
@@ -157,10 +164,10 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
     if (nn) s().renameEntry(winId, side, entry, nn);
   };
 
-  const transferTo = (entry: DirEntry, mode: 'move' | 'copy') => {
-    // Send a specific entry to the other pane's current directory.
-    setDrag({ winId, side, name: entry.name });
-    s().internalDrop(winId, otherSide, null, mode === 'copy');
+  const transferTo = (mode: 'move' | 'copy') => {
+    // Move/copy the current selection into the other pane — no drag gesture,
+    // so it works the same on touch and desktop.
+    s().sendSelection(winId, side, mode === 'copy');
   };
 
   // ── Toolbar ── (rendered via function call, not <Toolbar/>, to avoid remounts)
@@ -192,6 +199,8 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
       <div className="w-px h-5 bg-ghost-border mx-0.5" />
       <IconBtn name="list" title="List view" active={pane.view === 'list'} onClick={() => s().setView(winId, side, 'list')} />
       <IconBtn name="grid" title="Grid view" active={pane.view === 'grid'} onClick={() => s().setView(winId, side, 'grid')} />
+      <div className="w-px h-5 bg-ghost-border mx-0.5" />
+      <IconBtn name="collapse" title="Minimize this pane to a rail" onClick={() => s().collapsePane(winId, side)} />
     </div>
   );
 
@@ -343,7 +352,7 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
               return (
                 <div
                   key={entry.name}
-                  draggable
+                  draggable={!IS_TOUCH}
                   onDragStart={(e) => onEntryDragStart(entry, e)}
                   onDragEnd={() => setDrag(null)}
                   onDragOver={(e) => entry.kind === 'directory' && allowDrop(e, entry.name)}
@@ -391,7 +400,7 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
                 return (
                   <tr
                     key={entry.name}
-                    draggable
+                    draggable={!IS_TOUCH}
                     onDragStart={(e) => onEntryDragStart(entry, e)}
                     onDragEnd={() => setDrag(null)}
                     onDragOver={(e) => entry.kind === 'directory' && allowDrop(e, entry.name)}
@@ -434,10 +443,30 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
         )}
       </div>
 
-      {/* Status bar */}
-      <div className="flex items-center justify-between px-2 py-1 border-t border-ghost-border bg-ghost-surface/60 text-[10px] text-ghost-muted">
-        <span>{sorted.length} item{sorted.length === 1 ? '' : 's'}</span>
-        {pane.selected.length > 0 && <span>{pane.selected.length} selected</span>}
+      {/* Status bar — doubles as the touch-friendly move/copy action bar. When
+          anything is selected, tap "Move →" / "Copy →" to send it to the other
+          pane (no dragging required, which is what hangs on mobile). */}
+      <div className="flex items-center justify-between gap-2 px-2 py-1 border-t border-ghost-border bg-ghost-surface/60 text-[10px] text-ghost-muted">
+        <span className="shrink-0">{sorted.length} item{sorted.length === 1 ? '' : 's'}</span>
+        {pane.selected.length > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="shrink-0">{pane.selected.length} selected</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); transferTo('move'); }}
+              title="Move selection to the other pane"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-ghost-accent/20 border border-ghost-accent/40 text-[11px] text-ghost-text hover:bg-ghost-accent/30 active:bg-ghost-accent/40 transition-colors"
+            >
+              <Icon name="move" size={12} /> Move →
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); transferTo('copy'); }}
+              title="Copy selection to the other pane"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-ghost-card border border-ghost-border text-[11px] text-ghost-text hover:border-ghost-accent/50 active:bg-ghost-surface transition-colors"
+            >
+              <Icon name="copy" size={12} /> Copy →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Context menu */}
@@ -450,8 +479,8 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
           onDelete={() => s().deleteSelected(winId, side)}
           onNewFolder={() => s().newFolder(winId, side)}
           onRefresh={() => s().refresh(winId, side)}
-          onCopyOther={() => menu.entry && transferTo(menu.entry, 'copy')}
-          onMoveOther={() => menu.entry && transferTo(menu.entry, 'move')}
+          onCopyOther={() => transferTo('copy')}
+          onMoveOther={() => transferTo('move')}
           onCustomize={menu.entry && menu.entry.kind === 'directory' ? () => openCustomize(menu.entry!) : undefined}
         />
       )}
@@ -495,7 +524,7 @@ const IconBtn: React.FC<{
       e.stopPropagation();
       onClick();
     }}
-    className={`p-1.5 rounded transition-colors ${
+    className={`shrink-0 p-1.5 rounded transition-colors ${
       disabled
         ? 'text-ghost-dim cursor-not-allowed'
         : active

@@ -8,11 +8,39 @@
 import { create } from 'zustand';
 import { getAdapter } from '../core/fs';
 import type { DirEntry, DirRef, FsAdapter, RootShortcut } from '../core/fs';
+import type { SandboxSession } from '../core/archive';
 
 export type Side = 'left' | 'right';
 export type ViewMode = 'list' | 'grid';
 export type SortKey = 'name' | 'size' | 'mtime' | 'kind';
 export type ToastKind = 'info' | 'success' | 'error';
+export type Theme = 'light' | 'dark';
+
+const SANDBOX_KEY = 'gk:sandbox';
+function loadSandbox(): SandboxSession[] {
+  try {
+    const raw = localStorage.getItem(SANDBOX_KEY);
+    return raw ? (JSON.parse(raw) as SandboxSession[]) : [];
+  } catch {
+    return [];
+  }
+}
+function saveSandbox(sessions: SandboxSession[]): void {
+  try {
+    localStorage.setItem(SANDBOX_KEY, JSON.stringify(sessions));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+const THEME_KEY = 'gk:theme';
+function loadTheme(): Theme {
+  try {
+    return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
 
 export interface PaneState {
   stack: DirRef[]; // root → current; empty = nothing opened yet
@@ -35,7 +63,19 @@ export interface WindowState {
   z: number;
   minimized: boolean;
   maximized: boolean;
-  splitter: number; // left-pane fraction (0..1)
+  collapsed: Side | null; // a pane minimized to a rail (the OTHER pane fills the window)
+  splitter: number; // first-pane fraction (0..1): left when side-by-side, top when stacked
+  // ── Staging workspace ──
+  // The window is a two-deck staging view: the BOTTOM deck (panes.right) is a
+  // folders-only browser used to pick up to five working folders; the TOP deck
+  // (panes.left) shows the files of whichever staged folder is active.
+  staged: DirRef[]; // picked working folders (max 5), in pick order
+  activeStaged: number | null; // index into `staged` whose files fill the top deck
+  // Navigation history for the TOP deck (the contents view) — drives back/forward.
+  topHistory: DirRef[][]; // each entry is a full stack (root → folder shown up top)
+  topIndex: number; // position within topHistory; -1 = nothing opened yet
+  preview: DirEntry | null; // a file opened in-place in the top deck (null = file list)
+  topFull: boolean; // top deck expanded to fill the whole window
   panes: Record<Side, PaneState>;
   restore?: { x: number; y: number; w: number; h: number };
 }
@@ -103,6 +143,62 @@ export function folderKey(stackNames: string[], name: string): string {
   return [...stackNames, name].join('/');
 }
 
+// ── Smart filing: who / what / when / where tags on folders ──
+// A folder keeps its filesystem name but can be categorised along four axes, so
+// the same folder can be separated/filtered many ways. Each axis holds any
+// number of values. Like folder prefs, tags live only in the app (localStorage)
+// — we never rename folders or write marker files, and there's no indexing.
+export const TAG_AXES = ['who', 'what', 'when', 'where'] as const;
+export type TagAxis = (typeof TAG_AXES)[number];
+export type FolderTags = Record<TagAxis, string[]>;
+
+export function emptyTags(): FolderTags {
+  return { who: [], what: [], when: [], where: [] };
+}
+
+export function tagsAreEmpty(t: FolderTags): boolean {
+  return TAG_AXES.every((a) => t[a].length === 0);
+}
+
+function normalizeAxis(values: string[]): string[] {
+  const out: string[] = [];
+  for (const raw of values) {
+    const v = raw.trim();
+    if (v && !out.some((x) => x.toLowerCase() === v.toLowerCase())) out.push(v);
+  }
+  return out;
+}
+
+const TAGS_KEY = 'gk:folderTags';
+
+function loadTags(): Record<string, FolderTags> {
+  try {
+    const raw = localStorage.getItem(TAGS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, Partial<FolderTags>>;
+    const out: Record<string, FolderTags> = {};
+    for (const [key, t] of Object.entries(parsed)) {
+      out[key] = {
+        who: Array.isArray(t.who) ? t.who : [],
+        what: Array.isArray(t.what) ? t.what : [],
+        when: Array.isArray(t.when) ? t.when : [],
+        where: Array.isArray(t.where) ? t.where : [],
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function saveTags(tags: Record<string, FolderTags>): void {
+  try {
+    localStorage.setItem(TAGS_KEY, JSON.stringify(tags));
+  } catch {
+    /* storage unavailable / full — keep in-memory only */
+  }
+}
+
 interface ExplorerStore {
   adapter: FsAdapter;
   roots: RootShortcut[];
@@ -111,13 +207,20 @@ interface ExplorerStore {
   nextId: number;
   toast: { msg: string; kind: ToastKind } | null;
   folderPrefs: Record<string, FolderPref>;
+  folderTags: Record<string, FolderTags>;
+  theme: Theme;
 
   init: () => Promise<void>;
   notify: (msg: string, kind?: ToastKind) => void;
+  setTheme: (theme: Theme) => void;
 
   // ── Folder customization ──
   setFolderPref: (key: string, pref: FolderPref) => void;
   resetFolderPref: (key: string) => void;
+
+  // ── Smart filing: folder tags ──
+  setFolderTags: (key: string, tags: FolderTags) => void;
+  clearFolderTags: (key: string) => void;
 
   // ── Window lifecycle ──
   newWindow: () => void;
@@ -127,6 +230,8 @@ interface ExplorerStore {
   minimize: (id: number) => void;
   unminimize: (id: number) => void;
   toggleMax: (id: number) => void;
+  collapsePane: (id: number, side: Side) => void;
+  expandPanes: (id: number) => void;
   setSplitter: (id: number, frac: number) => void;
 
   // ── Pane navigation ──
@@ -146,12 +251,43 @@ interface ExplorerStore {
   newFolder: (id: number, side: Side) => Promise<void>;
   renameEntry: (id: number, side: Side, entry: DirEntry, newName: string) => Promise<void>;
   deleteSelected: (id: number, side: Side) => Promise<void>;
+  deleteEntry: (id: number, side: Side, entry: DirEntry) => Promise<void>;
   openFile: (id: number, side: Side, entry: DirEntry) => Promise<void>;
 
   // ── Drag & drop ──
   internalDrop: (id: number, side: Side, destEntry: DirEntry | null, copy: boolean) => Promise<void>;
   externalDrop: (id: number, side: Side, dt: DataTransfer) => Promise<void>;
+  // Touch-friendly move/copy: send the current selection to the other pane's
+  // folder without any drag gesture (drag-and-drop is mouse-only on Android).
+  sendSelection: (id: number, side: Side, copy: boolean) => Promise<void>;
+
+  // ── Staging workspace ──
+  stageFolder: (id: number, entry: DirEntry) => Promise<void>; // pick a folder → tray + active
+  activateStaged: (id: number, idx: number) => Promise<void>; // make a staged folder active
+  unstageFolder: (id: number, idx: number) => void; // drop a folder from the tray
+  moveTopSelectionTo: (id: number, targetIdx: number, copy: boolean) => Promise<void>; // top files → staged folder
+
+  // ── Top-deck navigation (the contents view) ──
+  drillTop: (id: number, entry: DirEntry) => Promise<void>; // open a subfolder shown up top
+  topUp: (id: number) => Promise<void>;
+  topBreadcrumb: (id: number, index: number) => Promise<void>;
+  topBack: (id: number) => Promise<void>;
+  topForward: (id: number) => Promise<void>;
+
+  // ── In-place file viewer ──
+  openPreview: (id: number, entry: DirEntry) => void; // show a file inside the top deck
+  closePreview: (id: number) => void; // back to the file list
+  setTopFull: (id: number, full: boolean) => void; // expand the top deck to full window
+
+  // ── Archive sandbox (Limbo) ──
+  sandboxSessions: SandboxSession[];
+  addSandbox: (session: SandboxSession) => void;
+  removeSandbox: (id: string) => void;
+  openTopRef: (id: number, ref: DirRef) => Promise<void>; // open a raw folder ref in the top deck
 }
+
+// Maximum number of folders that can be staged to work in at once.
+export const MAX_STAGED = 5;
 
 export const useExplorer = create<ExplorerStore>((set, get) => {
   // ── internal helpers ──
@@ -172,8 +308,28 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     return p && p.stack.length ? p.stack[p.stack.length - 1] : undefined;
   };
 
+  const sameStack = (a: DirRef[], b: DirRef[]): boolean =>
+    a.length === b.length && (a.length === 0 || sameDir(a[a.length - 1], b[b.length - 1]));
+
+  // Push a new top-deck location onto the history (truncating any forward entries).
+  const recordTop = (id: number, stack: DirRef[]) => {
+    const win = get().windows.find((w) => w.id === id);
+    if (!win) return;
+    const hist = win.topHistory.slice(0, win.topIndex + 1);
+    const last = hist[hist.length - 1];
+    if (!last || !sameStack(last, stack)) hist.push(stack);
+    patchWindow(id, (w) => ({ ...w, topHistory: hist, topIndex: hist.length - 1 }));
+  };
+
+  const topNavigate = async (id: number, stack: DirRef[]) => {
+    await loadInto(id, 'left', stack);
+    recordTop(id, stack);
+  };
+
   const loadInto = async (id: number, side: Side, stack: DirRef[]) => {
     const dir = stack[stack.length - 1];
+    // Navigating the top deck closes any in-place file preview.
+    if (side === 'left') patchWindow(id, (w) => ({ ...w, preview: null }));
     patchPane(id, side, { loading: true, error: null, stack, selected: [] });
     try {
       const entries = await get().adapter.list(dir);
@@ -193,14 +349,27 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     nextId: 1,
     toast: null,
     folderPrefs: {},
+    folderTags: {},
+    sandboxSessions: [],
+    theme: loadTheme(),
 
     init: async () => {
       const adapter = getAdapter();
-      set({ folderPrefs: loadPrefs() });
+      // Show the explorer immediately, then fill in storage access + roots.
+      set({ adapter, folderPrefs: loadPrefs(), folderTags: loadTags(), sandboxSessions: loadSandbox() });
+      if (get().windows.length === 0) get().newWindow();
       await adapter.ensureAccess().catch(() => false);
       const roots = await adapter.roots().catch(() => []);
-      set({ adapter, roots });
-      if (get().windows.length === 0) get().newWindow();
+      set({ roots });
+    },
+
+    setTheme: (theme) => {
+      try {
+        localStorage.setItem(THEME_KEY, theme);
+      } catch {
+        /* storage unavailable — keep in-memory only */
+      }
+      set({ theme });
     },
 
     notify: (msg, kind = 'info') => {
@@ -230,25 +399,53 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       set({ folderPrefs: next });
     },
 
+    setFolderTags: (key, tags) => {
+      const cleaned: FolderTags = {
+        who: normalizeAxis(tags.who),
+        what: normalizeAxis(tags.what),
+        when: normalizeAxis(tags.when),
+        where: normalizeAxis(tags.where),
+      };
+      const next = { ...get().folderTags };
+      if (tagsAreEmpty(cleaned)) delete next[key];
+      else next[key] = cleaned;
+      saveTags(next);
+      set({ folderTags: next });
+    },
+
+    clearFolderTags: (key) => {
+      const next = { ...get().folderTags };
+      delete next[key];
+      saveTags(next);
+      set({ folderTags: next });
+    },
+
     // ── Window lifecycle ──
     newWindow: () => {
       const { nextId, zTop, windows } = get();
       const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
       const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-      const w = Math.min(1100, Math.max(720, Math.round(vw * 0.78)));
-      const h = Math.min(720, Math.max(440, Math.round(vh * 0.74)));
-      const offset = (windows.length % 6) * 28;
+      const phone = vw < 760;
+      const w = phone ? Math.round(vw * 0.92) : Math.min(1100, Math.max(720, Math.round(vw * 0.78)));
+      const h = phone ? Math.round(vh * 0.82) : Math.min(760, Math.max(440, Math.round(vh * 0.78)));
       const win: WindowState = {
         id: nextId,
-        title: 'Ghost Explorer',
-        x: Math.max(12, Math.round((vw - w) / 2) + offset),
-        y: Math.max(12, Math.round((vh - h) / 2) - 16 + offset),
+        title: 'Ghost Key',
+        x: Math.max(8, Math.round((vw - w) / 2)),
+        y: Math.max(8, Math.round((vh - h) / 2)),
         w,
         h,
         z: zTop + 1,
         minimized: false,
-        maximized: vw < 760, // phones: start maximized
+        maximized: false, // opens as a floating box over the wallpaper; Maximize fills the screen
+        collapsed: null,
         splitter: 0.5,
+        staged: [],
+        activeStaged: null,
+        topHistory: [],
+        topIndex: -1,
+        preview: null,
+        topFull: false,
         panes: { left: emptyPane(), right: emptyPane() },
       };
       set({ windows: [...windows, win], nextId: nextId + 1, zTop: zTop + 1 });
@@ -279,6 +476,13 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         }
         return { ...w, maximized: true, restore: { x: w.x, y: w.y, w: w.w, h: w.h } };
       }),
+
+    // Minimize a single pane to a labeled rail; the other pane takes the whole
+    // window. Nothing about the collapsed pane is reset — its open folder,
+    // breadcrumb trail and selection all live in the store and return on expand.
+    collapsePane: (id, side) => patchWindow(id, (w) => ({ ...w, collapsed: side })),
+
+    expandPanes: (id) => patchWindow(id, (w) => ({ ...w, collapsed: null })),
 
     setSplitter: (id, frac) =>
       patchWindow(id, (w) => ({ ...w, splitter: Math.min(0.85, Math.max(0.15, frac)) })),
@@ -383,6 +587,19 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       }
     },
 
+    deleteEntry: async (id, side, entry) => {
+      const dir = currentDir(id, side);
+      if (!dir) return;
+      if (!window.confirm(`Delete "${entry.name}"? This cannot be undone.`)) return;
+      try {
+        await get().adapter.remove(dir, entry);
+        await get().refresh(id, side);
+        get().notify(`Deleted "${entry.name}"`, 'success');
+      } catch (e) {
+        get().notify(e instanceof Error ? e.message : 'Delete failed', 'error');
+      }
+    },
+
     openFile: async (_id, _side, entry) => {
       if (entry.kind !== 'file') return;
       try {
@@ -468,6 +685,195 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         }
       } catch (e) {
         get().notify(e instanceof Error ? e.message : 'Import failed', 'error');
+      }
+    },
+
+    // ── Staging workspace ──
+    // Pick a folder from the bottom browser: add it to the tray (max 5, no
+    // duplicates) and make it active so its files fill the top deck.
+    stageFolder: async (id, entry) => {
+      if (entry.kind !== 'directory') return;
+      const win = get().windows.find((w) => w.id === id);
+      if (!win) return;
+      const ref = get().adapter.enter(entry);
+      let idx = win.staged.findIndex((r) => sameDir(r, ref));
+      if (idx < 0) {
+        if (win.staged.length >= MAX_STAGED) {
+          get().notify(`You can stage up to ${MAX_STAGED} folders — remove one first`, 'info');
+          return;
+        }
+        const staged = [...win.staged, ref];
+        idx = staged.length - 1;
+        patchWindow(id, (w) => ({ ...w, staged }));
+      }
+      patchWindow(id, (w) => ({ ...w, activeStaged: idx }));
+      await topNavigate(id, [ref]);
+    },
+
+    activateStaged: async (id, idx) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win || idx < 0 || idx >= win.staged.length) return;
+      patchWindow(id, (w) => ({ ...w, activeStaged: idx }));
+      await topNavigate(id, [win.staged[idx]]);
+    },
+
+    unstageFolder: (id, idx) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win || idx < 0 || idx >= win.staged.length) return;
+      const staged = win.staged.filter((_, i) => i !== idx);
+      let activeStaged = win.activeStaged;
+      const clearedActive = activeStaged === idx;
+      if (clearedActive) activeStaged = null;
+      else if (activeStaged !== null && activeStaged > idx) activeStaged -= 1;
+      patchWindow(id, (w) => ({
+        ...w,
+        staged,
+        activeStaged,
+        ...(clearedActive ? { topHistory: [], topIndex: -1 } : {}),
+      }));
+      // If we removed the folder currently shown up top, blank the top deck.
+      if (clearedActive) {
+        patchPane(id, 'left', { stack: [], entries: [], selected: [], error: null });
+      }
+    },
+
+    // Move/copy the files selected in the top deck into another staged folder.
+    moveTopSelectionTo: async (id, targetIdx, copy) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win) return;
+      const srcDir = currentDir(id, 'left');
+      const srcPane = getPane(id, 'left');
+      const destDir = win.staged[targetIdx];
+      if (!srcDir || !srcPane || !destDir) return;
+      if (sameDir(srcDir, destDir)) {
+        get().notify('That folder is already open above', 'info');
+        return;
+      }
+      const targets = srcPane.entries.filter(
+        (e) => e.kind === 'file' && srcPane.selected.includes(e.name),
+      );
+      if (targets.length === 0) return;
+      const mode = copy ? 'copy' : 'move';
+      let done = 0;
+      try {
+        for (const entry of targets) {
+          await get().adapter.transfer(srcDir, entry, destDir, mode);
+          done++;
+        }
+        if (done > 0) {
+          get().notify(`${copy ? 'Copied' : 'Moved'} ${done} file${done === 1 ? '' : 's'} → ${destDir.name}`, 'success');
+        }
+      } catch (e) {
+        get().notify(e instanceof Error ? e.message : 'Transfer failed', 'error');
+      } finally {
+        await get().refresh(id, 'left');
+      }
+    },
+
+    // ── Top-deck navigation (the contents view) ──
+    drillTop: async (id, entry) => {
+      if (entry.kind !== 'directory') return;
+      const win = get().windows.find((w) => w.id === id);
+      if (!win) return;
+      await topNavigate(id, [...win.panes.left.stack, get().adapter.enter(entry)]);
+    },
+
+    topUp: async (id) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win || win.panes.left.stack.length <= 1) return;
+      await topNavigate(id, win.panes.left.stack.slice(0, -1));
+    },
+
+    topBreadcrumb: async (id, index) => {
+      const win = get().windows.find((w) => w.id === id);
+      const stack = win?.panes.left.stack;
+      if (!stack || index < 0 || index >= stack.length) return;
+      await topNavigate(id, stack.slice(0, index + 1));
+    },
+
+    topBack: async (id) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win || win.topIndex <= 0) return;
+      const idx = win.topIndex - 1;
+      patchWindow(id, (w) => ({ ...w, topIndex: idx }));
+      await loadInto(id, 'left', win.topHistory[idx]);
+    },
+
+    topForward: async (id) => {
+      const win = get().windows.find((w) => w.id === id);
+      if (!win || win.topIndex >= win.topHistory.length - 1) return;
+      const idx = win.topIndex + 1;
+      patchWindow(id, (w) => ({ ...w, topIndex: idx }));
+      await loadInto(id, 'left', win.topHistory[idx]);
+    },
+
+    openTopRef: async (id, ref) => {
+      await topNavigate(id, [ref]);
+    },
+
+    // ── Archive sandbox (Limbo) ──
+    addSandbox: (session) => {
+      const next = [session, ...get().sandboxSessions.filter((s) => s.id !== session.id)];
+      saveSandbox(next);
+      set({ sandboxSessions: next });
+    },
+    removeSandbox: (id) => {
+      const next = get().sandboxSessions.filter((s) => s.id !== id);
+      saveSandbox(next);
+      set({ sandboxSessions: next });
+    },
+
+    // ── In-place file viewer ──
+    openPreview: (id, entry) => {
+      if (entry.kind !== 'file') return;
+      patchWindow(id, (w) => ({ ...w, preview: entry }));
+    },
+    closePreview: (id) => patchWindow(id, (w) => ({ ...w, preview: null })),
+    setTopFull: (id, full) => patchWindow(id, (w) => ({ ...w, topFull: full })),
+
+    sendSelection: async (id, side, copy) => {
+      const otherSide: Side = side === 'left' ? 'right' : 'left';
+      const srcDir = currentDir(id, side);
+      const srcPane = getPane(id, side);
+      const destDir = currentDir(id, otherSide);
+      if (!srcDir || !srcPane) return;
+      if (srcPane.selected.length === 0) return;
+      if (!destDir) {
+        get().notify('Open a folder in the other pane first', 'info');
+        return;
+      }
+      if (sameDir(srcDir, destDir)) {
+        get().notify('Both panes are showing the same folder', 'info');
+        return;
+      }
+      const targets = srcPane.entries.filter((e) => srcPane.selected.includes(e.name));
+      if (targets.length === 0) return;
+
+      const mode = copy ? 'copy' : 'move';
+      let done = 0;
+      try {
+        for (const entry of targets) {
+          // Never move/copy a folder into itself or one of its descendants.
+          if (entry.kind === 'directory') {
+            let intoSelf = false;
+            if (entry.uri && destDir.uri) {
+              intoSelf = destDir.uri === entry.uri || destDir.uri.startsWith(`${entry.uri}/`);
+            } else if (entry.handle && destDir.handle && entry.handle.isSameEntry) {
+              intoSelf = await entry.handle.isSameEntry(destDir.handle);
+            }
+            if (intoSelf) continue;
+          }
+          await get().adapter.transfer(srcDir, entry, destDir, mode);
+          done++;
+        }
+        if (done > 0) {
+          get().notify(`${copy ? 'Copied' : 'Moved'} ${done} item${done === 1 ? '' : 's'} → other pane`, 'success');
+        }
+      } catch (e) {
+        get().notify(e instanceof Error ? e.message : 'Transfer failed', 'error');
+      } finally {
+        await get().refresh(id, side);
+        await get().refresh(id, otherSide);
       }
     },
   };

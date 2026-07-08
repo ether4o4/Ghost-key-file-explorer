@@ -1,11 +1,13 @@
 package com.ether4o4.ghostkeyfileexplorer;
 
 import android.content.Intent;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
+import android.view.WindowManager;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -13,8 +15,27 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(AppManagerPlugin.class);
         super.onCreate(savedInstanceState);
+        enableWallpaperBackground();
         requestAllFilesAccess();
+    }
+
+    /**
+     * Ghost Key renders as a floating window over the home-screen wallpaper.
+     * FLAG_SHOW_WALLPAPER makes the system wallpaper visible behind the
+     * transparent parts of the window; the WebView itself is made transparent
+     * via capacitor.config (backgroundColor #00000000). Wrapped defensively so a
+     * device that doesn't support the flag simply falls back to a dark backdrop.
+     */
+    private void enableWallpaperBackground() {
+        try {
+            getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            getWindow().setStatusBarColor(Color.TRANSPARENT);
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER);
+        } catch (Exception ignored) {
+            // Wallpaper-behind not available here; the app stays usable on its own backdrop.
+        }
     }
 
     /**
