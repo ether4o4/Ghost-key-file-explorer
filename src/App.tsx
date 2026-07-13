@@ -1,4 +1,5 @@
 import { Desktop } from './components/explorer/Desktop';
+import { NeverSoftSplash } from './components/common/NeverSoftSplash';
 
 /**
  * Ghost Key — Dual-Pane File Explorer.
@@ -9,7 +10,12 @@ import { Desktop } from './components/explorer/Desktop';
  * Android APK. Directories are read on demand — no background scanning/indexing.
  */
 function App() {
-  return <Desktop />;
+  return (
+    <>
+      <NeverSoftSplash />
+      <Desktop />
+    </>
+  );
 }
 
 export default App;
