@@ -40,6 +40,7 @@ export interface DirRef {
   name: string;
   handle?: FSDirHandle; // web backend
   uri?: string; // native backend
+  category?: 'personal' | 'system'; // virtual categorized root (native only, no uri)
 }
 
 /** A quick-access location shown on the pane's start screen. */
@@ -67,6 +68,33 @@ export interface FsAdapter {
   importFiles(files: File[], destDir: DirRef): Promise<number>;
   importDrop(dt: DataTransfer, destDir: DirRef): Promise<number>;
   resolveUrl(entry: DirEntry): Promise<{ url: string; revoke?: () => void }>;
+  /** Synchronous thumbnail URL for an image entry, or null if unavailable. */
+  thumb(entry: DirEntry): string | null;
+  /** Virtual categorized roots (personal vs phone/app folders), if supported. */
+  categoryRoots(): { personal: DirRef; system: DirRef } | null;
+}
+
+// ─── File-type helpers ────────────────────────────────────────────────────────────
+
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'heic', 'heif', 'avif', 'svg', 'ico']);
+export function isImageExt(ext: string): boolean {
+  return IMAGE_EXTS.has(ext.toLowerCase());
+}
+
+/** Folders the phone or installed apps create — used to split panes into
+ *  "your folders" vs "phone & apps". Best-effort by name (case-insensitive). */
+const SYSTEM_DIRS = new Set([
+  'android', 'dcim', 'pictures', 'movies', 'music', 'download', 'downloads', 'documents',
+  'alarms', 'audiobooks', 'notifications', 'podcasts', 'ringtones', 'recordings', 'screenshots',
+]);
+const APP_DIRS = new Set([
+  'whatsapp', 'telegram', 'snapchat', 'instagram', 'facebook', 'messenger', 'viber', 'signal',
+  'line', 'wechat', 'tiktok', 'zoom', 'samsung', 'miui', 'backups', 'bluetooth', 'huawei',
+  'xiaomi', 'oneplus', 'truecaller', 'kik', 'discord', 'kakaotalk', 'tencent',
+]);
+function isSystemFolder(name: string): boolean {
+  const n = name.toLowerCase();
+  return SYSTEM_DIRS.has(n) || APP_DIRS.has(n);
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -353,6 +381,17 @@ const webAdapter: FsAdapter = {
     const url = URL.createObjectURL(file);
     return { url, revoke: () => URL.revokeObjectURL(url) };
   },
+
+  // Web grid thumbnails would require reading every file up-front; skip and
+  // fall back to icons. Single-image preview still works via resolveUrl().
+  thumb() {
+    return null;
+  },
+
+  // Categorized roots are an Android-storage concept; the web picker stays manual.
+  categoryRoots() {
+    return null;
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -370,6 +409,11 @@ async function nativeExists(uri: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function externalRoot(): Promise<string> {
+  const { uri } = await Filesystem.getUri({ directory: Directory.ExternalStorage, path: '' });
+  return uri.replace(/\/+$/, '');
 }
 
 const nativeAdapter: FsAdapter = {
@@ -426,6 +470,25 @@ const nativeAdapter: FsAdapter = {
   },
 
   async list(dir) {
+    // Virtual categorized root: list the top of internal storage and split it
+    // into the user's own folders vs phone/app folders.
+    if (dir.category) {
+      const root = await externalRoot();
+      const res = await Filesystem.readdir({ path: root });
+      const dirs = res.files.filter((f) => f.type === 'directory');
+      const want =
+        dir.category === 'system'
+          ? dirs.filter((f) => isSystemFolder(f.name))
+          : dirs.filter((f) => !isSystemFolder(f.name));
+      return want.map((f) => ({
+        name: f.name,
+        kind: 'directory' as EntryKind,
+        size: 0,
+        mtime: f.mtime ?? 0,
+        ext: '',
+        uri: f.uri,
+      }));
+    }
     const res = await Filesystem.readdir({ path: dir.uri! });
     return res.files.map((f) => ({
       name: f.name,
@@ -486,6 +549,17 @@ const nativeAdapter: FsAdapter = {
 
   async resolveUrl(entry) {
     return { url: Capacitor.convertFileSrc(entry.uri!) };
+  },
+
+  thumb(entry) {
+    return entry.uri && isImageExt(entry.ext) ? Capacitor.convertFileSrc(entry.uri) : null;
+  },
+
+  categoryRoots() {
+    return {
+      personal: { backend: 'native', name: 'My Folders', category: 'personal' },
+      system: { backend: 'native', name: 'Phone & Apps', category: 'system' },
+    };
   },
 };
 

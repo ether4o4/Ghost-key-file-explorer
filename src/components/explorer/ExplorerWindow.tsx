@@ -109,7 +109,8 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
     ? { left: 0, top: 0, width: '100%', height: '100%', zIndex: win.z }
     : { left: win.x, top: win.y, width: win.w, height: win.h, zIndex: win.z };
 
-  const leftPct = `${(win.splitter * 100).toFixed(2)}%`;
+  // Left pane gets a fraction of the space left over after the 56px centre dock.
+  const leftPct = `calc((100% - 56px) * ${win.splitter.toFixed(3)})`;
 
   return (
     <div
@@ -142,18 +143,13 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
         </WinBtn>
       </div>
 
-      {/* Dual-pane body */}
+      {/* Dual-pane body: left = FROM, centre dock = transfer/resize, right = TO */}
       <div className="flex-1 flex min-h-0">
-        <div style={{ width: leftPct }} className="min-w-0 border-r border-ghost-border">
+        <div style={{ width: leftPct }} className="min-w-0">
           <ExplorerPane winId={win.id} side="left" />
         </div>
-        {/* Splitter */}
-        <div
-          onPointerDown={startSplit}
-          className="w-1.5 shrink-0 cursor-col-resize bg-ghost-border hover:bg-ghost-accent transition-colors"
-          title="Drag to resize panes"
-        />
-        <div style={{ width: `calc(100% - ${leftPct} - 6px)` }} className="min-w-0">
+        <TransferDock win={win} onResizeDown={startSplit} />
+        <div className="flex-1 min-w-0">
           <ExplorerPane winId={win.id} side="right" />
         </div>
       </div>
@@ -168,6 +164,70 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
           <div onPointerDown={startResize('sw')} className="absolute bottom-0 left-0 w-3.5 h-3.5 cursor-sw-resize" />
         </>
       )}
+    </div>
+  );
+};
+
+/**
+ * Centre dock between the panes. Its background is the pane-resize handle; the
+ * buttons move/copy the *selection* from one pane into the other pane's folder.
+ * Primary flow (per the From → To model): left selection → right folder.
+ */
+const DockBtn: React.FC<{
+  title: string;
+  label: string;
+  icon: 'move' | 'copy';
+  dir: 'right' | 'left';
+  primary?: boolean;
+  enabled: boolean;
+  onClick: () => void;
+}> = ({ title, label, icon, dir, primary, enabled, onClick }) => (
+  <button
+    title={title}
+    disabled={!enabled}
+    onPointerDown={(e) => e.stopPropagation()}
+    onClick={(e) => {
+      e.stopPropagation();
+      onClick();
+    }}
+    className={`w-full flex flex-col items-center gap-0.5 py-2 rounded-lg border transition-colors ${
+      !enabled
+        ? 'border-transparent text-ghost-dim cursor-not-allowed'
+        : primary
+          ? 'border-ghost-accent/40 bg-ghost-accent/15 text-ghost-text hover:bg-ghost-accent/30'
+          : 'border-ghost-border text-ghost-muted hover:text-ghost-text hover:bg-ghost-card'
+    }`}
+  >
+    <span className="flex items-center gap-0.5">
+      {dir === 'left' && <Icon name="chevronRight" size={12} className="rotate-180" />}
+      <Icon name={icon} size={15} />
+      {dir === 'right' && <Icon name="chevronRight" size={12} />}
+    </span>
+    <span className="text-[9px] font-medium leading-none">{label}</span>
+  </button>
+);
+
+const TransferDock: React.FC<{ win: WindowState; onResizeDown: (e: React.PointerEvent) => void }> = ({
+  win,
+  onResizeDown,
+}) => {
+  const xfer = useExplorer.getState().transferSelection;
+  const leftSel = win.panes.left.selected.length;
+  const rightSel = win.panes.right.selected.length;
+  const rightOpen = win.panes.right.stack.length > 0;
+  const leftOpen = win.panes.left.stack.length > 0;
+
+  return (
+    <div
+      onPointerDown={onResizeDown}
+      title="Drag to resize panes"
+      className="w-14 shrink-0 flex flex-col items-center justify-center gap-1.5 px-1.5 bg-ghost-surface border-x border-ghost-border cursor-col-resize select-none"
+    >
+      <DockBtn title="Move selection from left → right" label="Move" icon="move" dir="right" primary enabled={leftSel > 0 && rightOpen} onClick={() => xfer(win.id, 'left', false)} />
+      <DockBtn title="Copy selection from left → right" label="Copy" icon="copy" dir="right" primary enabled={leftSel > 0 && rightOpen} onClick={() => xfer(win.id, 'left', true)} />
+      <div className="w-6 h-px bg-ghost-border my-0.5" />
+      <DockBtn title="Move selection from right → left" label="Move" icon="move" dir="left" enabled={rightSel > 0 && leftOpen} onClick={() => xfer(win.id, 'right', false)} />
+      <DockBtn title="Copy selection from right → left" label="Copy" icon="copy" dir="left" enabled={rightSel > 0 && leftOpen} onClick={() => xfer(win.id, 'right', true)} />
     </div>
   );
 };

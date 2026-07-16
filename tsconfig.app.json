@@ -21,5 +21,7 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "//": "Orphaned Expo/React Native scaffold (separate 'mobile transformation'); imports uninstalled expo-*/react-native and is not part of this Vite/Capacitor app. Excluded so the web + APK build stays green.",
+  "exclude": ["src/screens", "src/database", "src/services", "src/types"]
 }
