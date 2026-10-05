@@ -12,6 +12,17 @@ export const Desktop: React.FC = () => {
     init();
   }, [init]);
 
+  useEffect(() => {
+    const fit = () => {
+      if (window.innerWidth >= 760) return;
+      const store = useExplorer.getState();
+      store.windows.forEach(win => { if (!win.maximized) store.toggleMax(win.id); });
+    };
+    window.addEventListener('resize', fit);
+    fit();
+    return () => window.removeEventListener('resize', fit);
+  }, []);
+
   return (
     <div className="fixed inset-0 gk-desktop overflow-hidden select-none">
       <div className="absolute inset-0 gk-grid-overlay pointer-events-none opacity-60" />

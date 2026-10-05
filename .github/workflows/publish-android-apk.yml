@@ -33,6 +33,7 @@ permissions:
 
 jobs:
   publish-apk:
+    if: ${{ !startsWith(github.ref_name, 'polish/') && !startsWith(github.head_ref, 'polish/') }}
     runs-on: ubuntu-latest
 
     steps:
