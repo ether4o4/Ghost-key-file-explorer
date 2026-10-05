@@ -18,7 +18,7 @@ jobs:
           node-version: '22'
       - name: Build and changed-source lint
         run: |
-          npm ci
+          npm install --no-audit --no-fund
           npm run build
           npx eslint src/components/explorer/ExplorerWindow.tsx src/components/explorer/Desktop.tsx src/store/explorerStore.ts
       - uses: actions/setup-java@v4
