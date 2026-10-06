@@ -1,0 +1,9 @@
+{
+  "seed_run": 37360499260,
+  "seed_sha": "fa52190d37ee60c37b76a3a80dadcd743d5db833",
+  "seed_apk_sha": "15249be828ed74c9718dfa8854b20b1d313241a27019de8aa983488b38b1f05e",
+  "main_path": ".github/workflows/android-apk.yml",
+  "main_artifact": "Ghost-Key-File-Explorer-installable-debug-apk",
+  "selector": "\\.apk$",
+  "asset_prefix": "Ghost-key-file-explorer-test"
+}
