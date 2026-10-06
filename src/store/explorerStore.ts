@@ -235,8 +235,8 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const { nextId, zTop, windows } = get();
       const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
       const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-      const w = Math.min(1100, Math.max(720, Math.round(vw * 0.78)));
-      const h = Math.min(720, Math.max(440, Math.round(vh * 0.74)));
+      const w = Math.min(Math.max(240, vw - 24), 1100, Math.max(720, Math.round(vw * 0.78)));
+      const h = Math.min(Math.max(180, vh - 72), 720, Math.max(440, Math.round(vh * 0.74)));
       const offset = (windows.length % 6) * 28;
       const win: WindowState = {
         id: nextId,
@@ -275,7 +275,11 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       patchWindow(id, (w) => {
         if (w.maximized) {
           const r = w.restore ?? { x: w.x, y: w.y, w: w.w, h: w.h };
-          return { ...w, maximized: false, ...r, restore: undefined };
+          const width = Math.min(r.w, Math.max(240, window.innerWidth - 24));
+          const height = Math.min(r.h, Math.max(180, window.innerHeight - 72));
+          return { ...w, maximized: false, ...r, w: width, h: height,
+            x: Math.max(0, Math.min(r.x, window.innerWidth - width)),
+            y: Math.max(0, Math.min(r.y, window.innerHeight - 48 - height)), restore: undefined };
         }
         return { ...w, maximized: true, restore: { x: w.x, y: w.y, w: w.w, h: w.h } };
       }),

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useExplorer } from '../../store/explorerStore';
 import type { WindowState } from '../../store/explorerStore';
 import { ExplorerPane } from './ExplorerPane';
@@ -64,20 +64,26 @@ function endGesture() {
   active = null;
   window.removeEventListener('pointermove', onMove);
   window.removeEventListener('pointerup', endGesture);
+  window.removeEventListener('pointercancel', endGesture);
+  window.removeEventListener('blur', endGesture);
   document.body.style.userSelect = '';
   document.body.style.cursor = '';
 }
 
 function beginGesture(g: Gesture, cursor?: string) {
+  endGesture();
   active = g;
   document.body.style.userSelect = 'none';
   if (cursor) document.body.style.cursor = cursor;
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', endGesture);
+  window.addEventListener('pointercancel', endGesture);
+  window.addEventListener('blur', endGesture);
 }
 
 export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
   const store = useExplorer.getState;
+  useEffect(() => () => { if (active?.winId === win.id) endGesture(); }, [win.id]);
 
   if (win.minimized) return null;
 
@@ -119,9 +125,10 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
     >
       {/* Title bar */}
       <div
+        style={{ touchAction: 'none' }}
         onPointerDown={startMove}
         onDoubleClick={() => store().toggleMax(win.id)}
-        className="flex items-center gap-2 h-9 px-3 shrink-0 bg-ghost-surface border-b border-ghost-border cursor-default select-none"
+        className="flex items-center gap-2 h-12 px-3 shrink-0 bg-ghost-surface border-b border-ghost-border cursor-default select-none"
       >
         <div className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-ghost-accent" />
@@ -143,17 +150,18 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
       </div>
 
       {/* Dual-pane body */}
-      <div className="flex-1 flex min-h-0">
-        <div style={{ width: leftPct }} className="min-w-0 border-r border-ghost-border">
+      <div className="gk-explorer-body flex-1 flex min-h-0">
+        <div style={{ width: leftPct }} className="gk-explorer-pane min-w-0 border-r border-ghost-border">
           <ExplorerPane winId={win.id} side="left" />
         </div>
         {/* Splitter */}
         <div
+          style={{ touchAction: 'none' }}
           onPointerDown={startSplit}
-          className="w-1.5 shrink-0 cursor-col-resize bg-ghost-border hover:bg-ghost-accent transition-colors"
+          className="gk-pane-splitter w-1.5 shrink-0 cursor-col-resize bg-ghost-border hover:bg-ghost-accent transition-colors"
           title="Drag to resize panes"
         />
-        <div style={{ width: `calc(100% - ${leftPct} - 6px)` }} className="min-w-0">
+        <div style={{ width: `calc(100% - ${leftPct} - 6px)` }} className="gk-explorer-pane min-w-0">
           <ExplorerPane winId={win.id} side="right" />
         </div>
       </div>
@@ -185,7 +193,8 @@ const WinBtn: React.FC<{
       e.stopPropagation();
       onClick();
     }}
-    className={`w-7 h-7 flex items-center justify-center rounded-md text-ghost-muted transition-colors ${
+    aria-label={title}
+    className={`w-10 h-11 flex items-center justify-center rounded-md text-ghost-muted transition-colors ${
       danger ? 'hover:bg-ghost-red hover:text-white' : 'hover:bg-ghost-card hover:text-ghost-text'
     }`}
   >
