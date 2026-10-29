@@ -12,12 +12,8 @@ import { pathToFileURL } from 'node:url';
 const require = createRequire(import.meta.url);
 const { strToU8, zipSync } = await import(pathToFileURL(require.resolve('fflate')).href);
 
-// Import the compiled-free TS source via a tiny transpile-on-read shim is
-// overkill here; instead we import the pure functions by re-implementing the
-// import path through esbuild-free dynamic import of the source is not possible
-// in plain node. So we test through the built dist is also heavy. Keep it
-// focused: import the source using the Node TS stripping available in v22.
-import { extractToLimbo, repackage, hashBytes, safe as _ } from './_archive-bridge.mjs';
+// Import the compiled production source, not a parallel test implementation.
+import { extractToLimbo, repackage, hashBytes, safe } from './_archive-bridge.mjs';
 
 // ── In-memory adapter stub ────────────────────────────────────────────────
 function makeMemAdapter() {
@@ -26,11 +22,13 @@ function makeMemAdapter() {
   return {
     backend: 'native',
     _store: store,
+    _staged: 0,
     async readBytes(entry) {
       if (entry.__bytes) return entry.__bytes;
       return store.get(entry.uri);
     },
     async stagingDir(sub) {
+      this._staged++;
       const uri = `mem://ws/${sub}`;
       dirs.add(uri);
       return { backend: 'native', name: sub, uri };
@@ -83,15 +81,132 @@ test('rejects path traversal entries', async () => {
   );
 });
 
-test('rejects zip bombs by ratio', async () => {
-  // 80 MiB of zeros compresses tiny -> huge ratio over the 50 MiB floor.
-  const big = new Uint8Array(80 * 1024 * 1024);
-  const zip = zipSync({ 'bomb.bin': big }, { level: 6 });
+function headers(zip) {
+  const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+  const central = view.getUint32(zip.length - 6, true);
+  const local = view.getUint32(central + 42, true);
+  const payload = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+  return { view, central, local, payload };
+}
+
+test('rejects excessive declared output before inflation or staging', async () => {
+  const zip = zipSync({ 'bomb.bin': strToU8('tiny') });
+  const { view, central, local, payload } = headers(zip);
+  view.setUint32(central + 24, 512 * 1024 * 1024, true);
+  view.setUint32(local + 22, 512 * 1024 * 1024, true);
+  zip[payload] = 7; // Invalid deflate: inflation would fail before any size check.
   const adapter = makeMemAdapter();
   await assert.rejects(
     () => extractToLimbo(adapter, { kind: 'file', ext: 'zip', name: 'bomb.zip', __bytes: zip }),
-    /zip bomb|ratio/i,
+    /uncompressed size exceeds limit/i,
   );
+  assert.equal(adapter._staged, 0);
+});
+
+test('rejects declared compression ratio before inflation', async () => {
+  const zip = zipSync({ 'bomb.bin': strToU8('tiny') });
+  const { view, central, local, payload } = headers(zip);
+  view.setUint32(central + 24, 60 * 1024 * 1024, true);
+  view.setUint32(local + 22, 60 * 1024 * 1024, true);
+  zip[payload] = 7;
+  const adapter = makeMemAdapter();
+  await assert.rejects(() => extractToLimbo(adapter, { __bytes: zip }), /zip bomb|ratio/i);
+  assert.equal(adapter._staged, 0);
+});
+
+test('rejects aliases that would overwrite a staged file', async () => {
+  for (const alias of ['./a.txt', './/a.txt']) {
+    const adapter = makeMemAdapter();
+    const zip = zipSync({ 'a.txt': strToU8('first'), [alias]: strToU8('second') });
+    await assert.rejects(() => extractToLimbo(adapter, { __bytes: zip }), /colliding path/i);
+    assert.equal(adapter._staged, 0);
+  }
+});
+
+test('rejects file/directory conflicts in either order', async () => {
+  for (const names of [['folder', 'folder/file'], ['folder/file', 'folder']]) {
+    const adapter = makeMemAdapter();
+    const zip = zipSync(Object.fromEntries(names.map(n => [n, strToU8('data')])));
+    await assert.rejects(() => extractToLimbo(adapter, { __bytes: zip }), /file\/directory collision/i);
+    assert.equal(adapter._staged, 0);
+  }
+});
+
+test('rejects altered bytes even when stored file lengths still match', async () => {
+  const zip = zipSync({ 'a.txt': strToU8('hello') }, { level: 0 });
+  const { payload } = headers(zip);
+  zip[payload] ^= 1;
+  const adapter = makeMemAdapter();
+  await assert.rejects(() => extractToLimbo(adapter, { __bytes: zip }), /checksum mismatch/i);
+  assert.equal(adapter._staged, 0);
+});
+
+test('rejects under-declared deflate data instead of accepting a truncated prefix', async () => {
+  const zip = zipSync({ 'a.txt': strToU8('hello world') });
+  const prefix = zipSync({ 'a.txt': strToU8('hello') });
+  const { view, central, local } = headers(zip);
+  const p = headers(prefix);
+  const forgedPrefixCrc = p.view.getUint32(p.central + 16, true);
+  view.setUint32(central + 24, 5, true);
+  view.setUint32(local + 22, 5, true);
+  view.setUint32(central + 16, forgedPrefixCrc, true);
+  view.setUint32(local + 14, forgedPrefixCrc, true);
+  const adapter = makeMemAdapter();
+  await assert.rejects(() => extractToLimbo(adapter, { __bytes: zip }), /size\/checksum mismatch/i);
+  assert.equal(adapter._staged, 0);
+});
+
+test('rejects duplicate central-directory names before extraction', async () => {
+  const zip = zipSync({ 'a.txt': strToU8('first'), 'b.txt': strToU8('second') });
+  const { view, central } = headers(zip);
+  const next = central + 46 + view.getUint16(central + 28, true) + view.getUint16(central + 30, true) + view.getUint16(central + 32, true);
+  const secondLocal = view.getUint32(next + 42, true);
+  zip[next + 46] = 'a'.charCodeAt(0);
+  zip[secondLocal + 30] = 'a'.charCodeAt(0);
+  const adapter = makeMemAdapter();
+  await assert.rejects(() => extractToLimbo(adapter, { __bytes: zip }), /colliding path/i);
+  assert.equal(adapter._staged, 0);
+});
+
+test('rejects excess entry count and unsupported ZIP64 before staging', async () => {
+  const adapter = makeMemAdapter();
+  const zip = zipSync({ 'a.txt': strToU8('a'), 'b.txt': strToU8('b') });
+  await assert.rejects(() => extractToLimbo(adapter, { __bytes: zip }, { maxEntries: 1, maxTotalBytes: 1024, maxRatio: 200 }), /entry count/i);
+  const { view, central } = headers(zip);
+  view.setUint32(central + 24, 0xffffffff, true);
+  await assert.rejects(() => extractToLimbo(adapter, { __bytes: zip }), /ZIP64/i);
+  assert.equal(adapter._staged, 0);
+});
+
+test('rejects malformed directory offsets and unsafe path variants', async () => {
+  const adapter = makeMemAdapter();
+  const zip = zipSync({ 'a.txt': strToU8('a') });
+  const { view } = headers(zip);
+  view.setUint32(zip.length - 6, zip.length + 10, true);
+  await assert.rejects(() => extractToLimbo(adapter, { __bytes: zip }), /bounds/i);
+  for (const path of ['/absolute', '\\absolute', 'C:relative', 'C:\\absolute', 'a\0b', '../up']) {
+    assert.throws(() => safe(path), /unsafe path/i);
+  }
+  assert.deepEqual(safe(''), []);
+});
+
+test('preserves explicit empty directories and Unicode paths', async () => {
+  const files = { 'empty/': new Uint8Array(), 'café/notes.txt': strToU8('hello') };
+  const packed = repackage(files);
+  const adapter = makeMemAdapter();
+  const extracted = await extractToLimbo(adapter, { __bytes: packed.bytes });
+  assert.deepEqual(extracted.entries.map(e => e.path), ['empty/', 'café/notes.txt']);
+  assert.equal(extracted.fileCount, 1);
+  assert.equal(extracted.totalBytes, 5);
+});
+
+test('cleans up a partially written staging workspace on failure', async () => {
+  const adapter = makeMemAdapter();
+  let removed = false;
+  adapter.writeBytes = async () => { throw new Error('disk full'); };
+  adapter.removeDir = async () => { removed = true; };
+  await assert.rejects(() => extractToLimbo(adapter, { __bytes: zipSync({ 'a': strToU8('a') }) }), /disk full/);
+  assert.equal(removed, true);
 });
 
 test('repackage verifies round-trip and emits checksum', () => {

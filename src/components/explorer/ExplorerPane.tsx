@@ -129,9 +129,7 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
     if (getDrag()) {
       s().internalDrop(winId, side, destEntry, copy);
     } else if (e.dataTransfer.files?.length || e.dataTransfer.items?.length) {
-      // External (OS / browser) drop — if onto a folder, dive in first conceptually;
-      // for simplicity external imports always land in the current directory.
-      s().externalDrop(winId, side, e.dataTransfer);
+      s().externalDrop(winId, side, e.dataTransfer, destEntry);
     }
   };
 
@@ -458,7 +456,7 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
               ? () => s().limboOpen(winId, side, menu.entry!)
               : undefined
           }
-          onRepackageHere={() => s().limboRepackagePlace(winId, side)}
+          onRepackageHere={() => s().limboRepackagePlace(winId, side, menu.entry)}
           hasLimbo={!!limbo}
           onCustomize={menu.entry && menu.entry.kind === 'directory' ? () => openCustomize(menu.entry!) : undefined}
         />

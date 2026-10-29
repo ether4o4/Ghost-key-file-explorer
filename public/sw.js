@@ -28,7 +28,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+        keys.filter((key) => key.startsWith('ghost-key-') && key !== CACHE_NAME).map((key) => caches.delete(key))
       );
     })
   );
@@ -42,7 +42,27 @@ self.addEventListener('fetch', (event) => {
 
   // Skip non-GET and non-browser-origin requests
   if (request.method !== 'GET') return;
-  if (!url.origin.startsWith(self.location.origin)) return;
+  if (url.origin !== self.location.origin) return;
+  // Native file responses must stay tied to current disk bytes/grants, not an
+  // offline copy that could keep opening after a rename/delete or revocation.
+  if (url.pathname.startsWith('/_capacitor_file_/')) return;
+
+  // Refresh the entry document online so installed clients can load repaired
+  // hashed bundles without clearing IndexedDB, preferences or the cache key.
+  if (request.mode === 'navigate' || request.destination === 'document' || url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(request)
+        .then(async (response) => {
+          if (response.ok) {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(request, response.clone()).catch(() => undefined);
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
 
   // Static assets: cache-first
   if (
@@ -55,9 +75,9 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.match(request).then((cached) => {
         return cached || fetch(request).then((response) => {
+          if (!response.ok) return response;
           return caches.open(CACHE_NAME).then((cache) => {
-            cache.put(request, response.clone());
-            return response;
+            return cache.put(request, response.clone()).then(() => response).catch(() => response);
           });
         });
       })

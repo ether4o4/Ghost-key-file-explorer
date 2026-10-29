@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { useExplorer } from '../../store/explorerStore';
 import type { WindowState } from '../../store/explorerStore';
 import { ExplorerPane } from './ExplorerPane';
 import { Icon } from './Icons';
+import { fitWindowBounds } from '../../core/windowLayout';
 
 const TASKBAR_H = 48;
 const MIN_W = 420;
@@ -64,6 +65,7 @@ function endGesture() {
   active = null;
   window.removeEventListener('pointermove', onMove);
   window.removeEventListener('pointerup', endGesture);
+  window.removeEventListener('pointercancel', endGesture);
   document.body.style.userSelect = '';
   document.body.style.cursor = '';
 }
@@ -74,10 +76,27 @@ function beginGesture(g: Gesture, cursor?: string) {
   if (cursor) document.body.style.cursor = cursor;
   window.addEventListener('pointermove', onMove);
   window.addEventListener('pointerup', endGesture);
+  window.addEventListener('pointercancel', endGesture);
 }
 
 export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
   const store = useExplorer.getState;
+  const frame = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const fit = () => {
+      const layer = frame.current?.parentElement;
+      const current = useExplorer.getState().windows.find((item) => item.id === win.id);
+      if (!layer || !current || current.maximized || current.minimized) return;
+      const bounds = fitWindowBounds(current, layer.clientWidth, layer.clientHeight);
+      if (bounds.x !== current.x || bounds.y !== current.y || bounds.w !== current.w || bounds.h !== current.h) {
+        useExplorer.getState().setBounds(win.id, bounds);
+      }
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [win.id, win.maximized, win.minimized]);
 
   if (win.minimized) return null;
 
@@ -114,6 +133,7 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
 
   return (
     <div
+      ref={frame}
       className="absolute flex flex-col rounded-xl overflow-hidden border border-ghost-border bg-ghost-bg"
       style={{ ...frameStyle, boxShadow: '0 24px 70px rgba(0,0,0,0.55)' }}
       onMouseDown={() => store().focusWindow(win.id)}
@@ -152,7 +172,7 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
 
       {/* Dual-pane body */}
       <div className="flex-1 flex min-h-0">
-        <div style={{ width: leftPct }} className={`min-w-0 ${dual ? 'border-r border-ghost-border' : ''}`}>
+        <div style={{ width: dual ? `calc(${leftPct} - 6px)` : leftPct }} className={`min-w-0 ${dual ? 'border-r border-ghost-border' : ''}`}>
           <ExplorerPane winId={win.id} side="left" />
         </div>
         {dual && (
@@ -204,7 +224,7 @@ const WinBtn: React.FC<{
       e.stopPropagation();
       onClick();
     }}
-    className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
+    className={`relative z-10 w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
       danger ? 'hover:bg-ghost-red hover:text-white' : 'hover:bg-ghost-card hover:text-ghost-text'
     } ${active ? 'text-ghost-accent bg-ghost-accent/10' : 'text-ghost-muted'}`}
   >

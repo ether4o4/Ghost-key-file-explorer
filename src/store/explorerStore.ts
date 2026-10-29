@@ -9,6 +9,7 @@ import { create } from 'zustand';
 import { getAdapter } from '../core/fs';
 import type { DirEntry, DirRef, FsAdapter, RootShortcut } from '../core/fs';
 import { extractToLimbo, repackage } from '../core/archive';
+import { fitWindowBounds, sanitizeWindowPrefs } from '../core/windowLayout';
 
 export type Side = 'left' | 'right';
 export type ViewMode = 'list' | 'grid';
@@ -69,10 +70,10 @@ function emptyPane(): PaneState {
   };
 }
 
-function sameDir(a: DirRef | undefined, b: DirRef | undefined): boolean {
-  if (!a || !b) return false;
-  if (a.backend === 'native') return a.uri === b.uri;
-  return a.handle === b.handle;
+async function sameDir(a: DirRef | undefined, b: DirRef | undefined): Promise<boolean> {
+  if (!a || !b || a.backend !== b.backend) return false;
+  if (a.backend === 'native') return !!a.uri && !!b.uri && (a.canonicalUri ?? a.uri).replace(/\/+$/, '') === (b.canonicalUri ?? b.uri).replace(/\/+$/, '');
+  return a.handle === b.handle || !!(await a.handle?.isSameEntry?.(b.handle!));
 }
 
 // ── Per-folder customization (color + icon), persisted locally ──
@@ -125,7 +126,7 @@ function saveLayoutMode(mode: LayoutMode): void {
 function loadWindowPrefs(): Partial<WindowPrefs> {
   try {
     const raw = localStorage.getItem(WINDOW_KEY);
-    return raw ? (JSON.parse(raw) as Partial<WindowPrefs>) : {};
+    return raw ? sanitizeWindowPrefs(JSON.parse(raw)) : {};
   } catch {
     return {};
   }
@@ -151,11 +152,12 @@ function loadPrefs(): Record<string, FolderPref> {
   }
 }
 
-function savePrefs(prefs: Record<string, FolderPref>): void {
+function savePrefs(prefs: Record<string, FolderPref>): boolean {
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+    return true;
   } catch {
-    /* storage unavailable / full — keep in-memory only */
+    return false;
   }
 }
 
@@ -215,11 +217,11 @@ interface ExplorerStore {
 
   // ── Drag & drop ──
   internalDrop: (id: number, side: Side, destEntry: DirEntry | null, copy: boolean) => Promise<void>;
-  externalDrop: (id: number, side: Side, dt: DataTransfer) => Promise<void>;
+  externalDrop: (id: number, side: Side, dt: DataTransfer, destEntry?: DirEntry | null) => Promise<void>;
 
   // ── Limbo archive workflow ──
   limboOpen: (id: number, side: Side, entry: DirEntry) => Promise<void>;
-  limboRepackagePlace: (id: number, side: Side) => Promise<void>;
+  limboRepackagePlace: (id: number, side: Side, destEntry?: DirEntry | null) => Promise<void>;
   limboDiscard: () => Promise<void>;
 }
 
@@ -242,17 +244,68 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     return p && p.stack.length ? p.stack[p.stack.length - 1] : undefined;
   };
 
+  const loads = new Map<string, number>();
   const loadInto = async (id: number, side: Side, stack: DirRef[]) => {
+    const key = `${id}:${side}`;
+    const generation = (loads.get(key) ?? 0) + 1;
+    loads.set(key, generation);
     const dir = stack[stack.length - 1];
     patchPane(id, side, { loading: true, error: null, stack, selected: [] });
     try {
       const entries = await get().adapter.list(dir);
+      if (loads.get(key) !== generation || getPane(id, side)?.stack !== stack) return;
       patchPane(id, side, { entries, loading: false });
     } catch (e) {
+      if (loads.get(key) !== generation || getPane(id, side)?.stack !== stack) return;
       const msg = e instanceof Error ? e.message : 'Could not read folder';
       patchPane(id, side, { loading: false, error: msg, entries: [] });
       get().notify(msg, 'error');
     }
+  };
+
+  const refreshDirs = async (...dirs: DirRef[]) => {
+    for (const win of get().windows) {
+      for (const side of ['left', 'right'] as const) {
+        const current = currentDir(win.id, side);
+        for (const dir of dirs) {
+          if (await sameDir(current, dir).catch(() => false)) {
+            await get().refresh(win.id, side);
+            break;
+          }
+        }
+      }
+    }
+  };
+
+  const carryFolderPrefs = (oldKey: string, newKey: string): boolean => {
+    const prefs = get().folderPrefs;
+    const next = { ...prefs };
+    let changed = false;
+    for (const [key, pref] of Object.entries(prefs)) {
+      if (key !== oldKey && !key.startsWith(`${oldKey}/`)) continue;
+      const destination = newKey + key.slice(oldKey.length);
+      // Retain legacy keys and never overwrite existing destination metadata.
+      // Existing formats stay readable; no user preference is discarded.
+      if (!next[destination]) {
+        next[destination] = { ...pref };
+        changed = true;
+      }
+    }
+    if (!changed) return true;
+    const saved = savePrefs(next);
+    set({ folderPrefs: next });
+    return saved;
+  };
+
+  let limboBusy = false;
+  const withLimbo = async (operation: () => Promise<void>): Promise<void> => {
+    if (limboBusy) {
+      get().notify('Wait for the current Limbo operation to finish.', 'info');
+      return;
+    }
+    limboBusy = true;
+    try { await operation(); }
+    finally { limboBusy = false; }
   };
 
   return {
@@ -268,10 +321,13 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     init: async () => {
       const adapter = getAdapter();
       set({ folderPrefs: loadPrefs() });
-      await adapter.ensureAccess().catch(() => false);
+      const access = await adapter.ensureAccess().catch(() => false);
       const roots = await adapter.roots().catch(() => []);
       set({ adapter, roots });
       if (get().windows.length === 0) get().newWindow();
+      if (adapter.backend === 'native' && !access) {
+        get().notify('Storage permission is unavailable. Regrant access to an allowed location and retry.', 'error');
+      }
     },
 
     notify: (msg, kind = 'info') => {
@@ -290,15 +346,17 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const next = { ...get().folderPrefs };
       if (Object.keys(merged).length === 0) delete next[key];
       else next[key] = merged;
-      savePrefs(next);
+      const saved = savePrefs(next);
       set({ folderPrefs: next });
+      if (!saved) get().notify('Folder settings could not be saved; changes are in-memory only.', 'error');
     },
 
     resetFolderPref: (key) => {
       const next = { ...get().folderPrefs };
       delete next[key];
-      savePrefs(next);
+      const saved = savePrefs(next);
       set({ folderPrefs: next });
+      if (!saved) get().notify('Folder settings could not be saved; changes are in-memory only.', 'error');
     },
 
     // ── Window lifecycle ──
@@ -310,13 +368,16 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const h = Math.min(720, Math.max(440, Math.round(vh * 0.74)));
       const offset = (windows.length % 6) * 28;
       const saved = loadWindowPrefs();
+      const bounds = fitWindowBounds({
+        x: saved.x ?? Math.round((vw - w) / 2) + offset,
+        y: saved.y ?? Math.round((vh - h) / 2) - 16 + offset,
+        w: saved.w ?? w,
+        h: saved.h ?? h,
+      }, vw, vh - 48);
       const win: WindowState = {
         id: nextId,
         title: 'Ghost Explorer',
-        x: Math.max(12, Math.min(vw - 120, saved.x ?? Math.round((vw - w) / 2) + offset)),
-        y: Math.max(12, Math.min(vh - 84, saved.y ?? Math.round((vh - h) / 2) - 16 + offset)),
-        w: Math.min(vw - 24, Math.max(420, saved.w ?? w)),
-        h: Math.min(vh - 72, Math.max(280, saved.h ?? h)),
+        ...bounds,
         z: zTop + 1,
         minimized: false,
         maximized: saved.maximized ?? vw < 760, // phones: start maximized
@@ -327,7 +388,11 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       set({ windows: [...windows, win], nextId: nextId + 1, zTop: zTop + 1 });
     },
 
-    closeWindow: (id) => set((s) => ({ windows: s.windows.filter((w) => w.id !== id) })),
+    closeWindow: (id) => {
+      loads.delete(`${id}:left`);
+      loads.delete(`${id}:right`);
+      set((s) => ({ windows: s.windows.filter((w) => w.id !== id) }));
+    },
 
     focusWindow: (id) => {
       const zTop = get().zTop + 1;
@@ -445,21 +510,33 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       if (!name || !name.trim()) return;
       try {
         await get().adapter.mkdir(dir, name.trim());
-        await get().refresh(id, side);
+        await refreshDirs(dir);
         get().notify(`Created "${name.trim()}"`, 'success');
       } catch (e) {
+        await refreshDirs(dir);
         get().notify(e instanceof Error ? e.message : 'Could not create folder', 'error');
       }
     },
 
     renameEntry: async (id, side, entry, newName) => {
       const dir = currentDir(id, side);
-      if (!dir || !newName.trim() || newName === entry.name) return;
+      const pane = getPane(id, side);
+      if (!dir || !newName.trim() || newName.trim() === entry.name) return;
       try {
         await get().adapter.rename(dir, entry, newName.trim());
-        await get().refresh(id, side);
-        get().notify('Renamed', 'success');
+        let prefsSaved = true;
+        if (entry.kind === 'directory' && pane) {
+          const oldKey = entry.uri ?? folderKey(pane.stack.map(ref => ref.name), entry.name);
+          const newKey = entry.uri
+            ? entry.uri.slice(0, entry.uri.lastIndexOf('/') + 1) + (entry.uri.startsWith('file://') ? encodeURIComponent(newName.trim()) : newName.trim())
+            : folderKey(pane.stack.map(ref => ref.name), newName.trim());
+          prefsSaved = carryFolderPrefs(oldKey, newKey);
+        }
+        await refreshDirs(dir);
+        if (prefsSaved) get().notify('Renamed', 'success');
+        else get().notify('Renamed, but folder settings could not be saved; changes are in-memory only.', 'error');
       } catch (e) {
+        await refreshDirs(dir);
         get().notify(e instanceof Error ? e.message : 'Rename failed', 'error');
       }
     },
@@ -469,13 +546,15 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const p = getPane(id, side);
       if (!dir || !p || p.selected.length === 0) return;
       const targets = p.entries.filter((e) => p.selected.includes(e.name));
+      if (targets.length === 0) return;
       const label = targets.length === 1 ? `"${targets[0].name}"` : `${targets.length} items`;
       if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
       try {
         for (const entry of targets) await get().adapter.remove(dir, entry);
-        await get().refresh(id, side);
+        await refreshDirs(dir);
         get().notify(`Deleted ${label}`, 'success');
       } catch (e) {
+        await refreshDirs(dir);
         get().notify(e instanceof Error ? e.message : 'Delete failed', 'error');
       }
     },
@@ -520,63 +599,42 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         return;
       }
 
-      const droppingOnSelf =
-        destEntry && destEntry.name === entry.name && sameDir(srcDir, currentDir(id, side));
-      if (droppingOnSelf) return;
-      if (!copy && !destEntry && sameDir(srcDir, destDir)) return; // move into same dir
-
-      // Block moving/copying a folder into itself or one of its descendants.
-      if (entry.kind === 'directory') {
-        let intoSelf = false;
-        if (entry.uri && destDir.uri) {
-          intoSelf = destDir.uri === entry.uri || destDir.uri.startsWith(`${entry.uri}/`);
-        } else if (entry.handle && destDir.handle && entry.handle.isSameEntry) {
-          intoSelf = await entry.handle.isSameEntry(destDir.handle);
-        }
-        if (intoSelf) {
-          get().notify('Cannot move a folder into itself', 'error');
-          return;
-        }
-      }
-
       const mode = copy ? 'copy' : 'move';
       try {
+        if (!copy && await sameDir(srcDir, destDir)) return;
+        // Ancestry and source identity are checked by the adapter before any write.
         await get().adapter.transfer(srcDir, entry, destDir, mode);
+        await refreshDirs(srcDir, destDir);
         get().notify(`${copy ? 'Copied' : 'Moved'} "${entry.name}"`, 'success');
-        await get().refresh(id, side);
-        if (payload.winId !== id || payload.side !== side) {
-          await get().refresh(payload.winId, payload.side);
-        } else {
-          await get().refresh(id, side);
-        }
       } catch (e) {
+        await refreshDirs(srcDir, destDir);
         get().notify(e instanceof Error ? e.message : 'Transfer failed', 'error');
       }
     },
 
-    externalDrop: async (id, side, dt) => {
-      const dir = currentDir(id, side);
+    externalDrop: async (id, side, dt, destEntry) => {
+      const dir = destEntry?.kind === 'directory' ? get().adapter.enter(destEntry) : currentDir(id, side);
       if (!dir) return;
       try {
         const n = await get().adapter.importDrop(dt, dir);
         if (n > 0) {
-          await get().refresh(id, side);
+          await refreshDirs(dir);
           get().notify(`Imported ${n} item${n === 1 ? '' : 's'}`, 'success');
         }
       } catch (e) {
+        await refreshDirs(dir);
         get().notify(e instanceof Error ? e.message : 'Import failed', 'error');
       }
     },
 
     // ── Limbo archive workflow ──
-    limboOpen: async (id, side, entry) => {
+    limboOpen: (id, side, entry) => withLimbo(async () => {
       if (entry.kind !== 'file' || entry.ext.toLowerCase() !== 'zip') {
         get().notify('Limbo inspection is for .zip archives', 'info');
         return;
       }
-      // Discard any previous workspace to keep staging isolated and bounded.
+      // A failed replacement must leave the current workspace available.
       const prev = get().limbo;
-      if (prev) await get().adapter.removeDir(prev.workspace).catch(() => {});
       get().notify(`Extracting "${entry.name}" into Limbo…`, 'info');
       try {
         const res = await extractToLimbo(get().adapter, entry);
@@ -592,6 +650,13 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
             sourceSide: side,
           },
         });
+        if (prev) {
+          try { await get().adapter.removeDir(prev.workspace); }
+          catch {
+            get().notify('New Limbo workspace is ready; previous cache cleanup failed.', 'error');
+            return;
+          }
+        }
         get().notify(
           `Limbo ready: ${res.fileCount} file(s), ${(res.totalBytes / 1048576).toFixed(1)} MiB staged`,
           'success',
@@ -599,15 +664,15 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       } catch (e) {
         get().notify(e instanceof Error ? e.message : 'Limbo extraction failed', 'error');
       }
-    },
+    }),
 
-    limboRepackagePlace: async (id, side) => {
+    limboRepackagePlace: (id, side, destEntry) => withLimbo(async () => {
       const ws = get().limbo;
       if (!ws) {
         get().notify('No Limbo workspace is open', 'info');
         return;
       }
-      const dir = currentDir(id, side);
+      const dir = destEntry?.kind === 'directory' ? get().adapter.enter(destEntry) : currentDir(id, side);
       if (!dir) {
         get().notify('Open a destination folder in this pane first', 'info');
         return;
@@ -617,20 +682,24 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       if (!archiveName.trim()) return;
       try {
         // Read every staged file back from the isolated workspace.
-        const files: Record<string, Uint8Array> = {};
-        const walk = async (relBase: string) => {
-          const sub: DirRef =
-            relBase === ''
-              ? ws.workspace
-              : await get().adapter.ensureDir(ws.workspace, relBase);
+        const files: Record<string, Uint8Array> = Object.create(null);
+        const found = new Set<string>();
+        const walk = async (sub: DirRef, relBase: string) => {
           const listed = await get().adapter.list(sub);
           for (const e of listed) {
             const rel = relBase ? `${relBase}/${e.name}` : e.name;
-            if (e.kind === 'directory') await walk(rel);
+            found.add(rel);
+            if (e.kind === 'directory') {
+              files[`${rel}/`] = new Uint8Array();
+              await walk(get().adapter.enter(e), rel);
+            }
             else files[rel] = await get().adapter.readBytes(e);
           }
         };
-        await walk('');
+        await walk(ws.workspace, '');
+        if (ws.entries.some((entry) => !found.has(entry.path.replace(/\/+$/, '')))) {
+          throw new Error('Staged archive contents are missing. Reopen the original archive before placing it.');
+        }
 
         const result = repackage(files);
         if (!result.verified) throw new Error('Verification failed');
@@ -639,26 +708,32 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
         const finalName = archiveName.trim().toLowerCase().endsWith('.zip')
           ? archiveName.trim()
           : `${archiveName.trim()}.zip`;
+        if (/[/\\\0]/.test(finalName)) throw new Error('Use an archive filename without path separators.');
         await get().adapter.writeBytes(dir, finalName, result.bytes);
-        await get().refresh(id, side);
+        await refreshDirs(dir);
         get().notify(
           `Placed "${finalName}" (${result.entryCount} entries, checksum ${result.checksum.slice(0, 8)})`,
           'success',
         );
       } catch (e) {
+        await refreshDirs(dir);
         get().notify(
           e instanceof Error ? e.message : 'Repackage & Place failed — archive not placed',
           'error',
         );
       }
-    },
+    }),
 
-    limboDiscard: async () => {
+    limboDiscard: () => withLimbo(async () => {
       const ws = get().limbo;
       if (!ws) return;
-      await get().adapter.removeDir(ws.workspace).catch(() => {});
-      set({ limbo: null });
-      get().notify('Limbo workspace discarded', 'info');
-    },
+      try {
+        await get().adapter.removeDir(ws.workspace);
+        set({ limbo: null });
+        get().notify('Limbo workspace discarded', 'info');
+      } catch (error) {
+        get().notify(error instanceof Error ? error.message : 'Could not discard Limbo workspace', 'error');
+      }
+    }),
   };
 });

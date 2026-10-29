@@ -7,6 +7,9 @@
 
 /** Split a relative path into clean segments, rejecting traversal/absolute paths. */
 export function safeSegments(relPath: string): string[] {
+  if (/^[\\/]/.test(relPath) || /^[a-zA-Z]:/.test(relPath) || relPath.includes('\0')) {
+    throw new Error(`Unsafe path rejected: ${relPath}`);
+  }
   const segs = relPath.split(/[\\/]+/).filter((s) => s && s !== '.');
   if (segs.some((s) => s === '..')) {
     throw new Error(`Unsafe path rejected: ${relPath}`);

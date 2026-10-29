@@ -33,8 +33,8 @@ export const Desktop: React.FC = () => {
 
       {/* Windows layer (above wallpaper, below taskbar) */}
       <div
-        className="absolute inset-x-0"
-        style={{ top: 'var(--gk-inset-top)', bottom: 'calc(48px + var(--gk-inset-bottom))' }}
+        className="absolute"
+        style={{ top: 'var(--gk-inset-top)', bottom: 'calc(48px + var(--gk-inset-bottom))', left: 'var(--gk-inset-left)', right: 'var(--gk-inset-right)' }}
       >
         {windows.map((w) => (
           <ExplorerWindow key={w.id} win={w} />
@@ -92,7 +92,7 @@ const Taskbar: React.FC = () => {
   return (
     <div
       className="absolute bottom-0 inset-x-0 flex items-center gap-2 px-2 bg-ghost-surface/85 backdrop-blur border-t border-ghost-border z-50"
-      style={{ height: 'calc(48px + var(--gk-inset-bottom))', paddingBottom: 'var(--gk-inset-bottom)' }}
+      style={{ height: 'calc(48px + var(--gk-inset-bottom))', paddingBottom: 'var(--gk-inset-bottom)', paddingLeft: 'calc(8px + var(--gk-inset-left))', paddingRight: 'calc(8px + var(--gk-inset-right))' }}
     >
       <button
         onClick={() => useExplorer.getState().newWindow()}

@@ -49,9 +49,18 @@ The File System Access API path remains only as the desktop-browser dev preview.
   on device; OPFS in the browser preview) — never the user's library.
 - Path-traversal rejection, absolute-path rejection, entry-count cap,
   uncompressed-size cap, and compression-ratio (ZIP-bomb) detection.
+- ZIP headers and declared limits are checked before decompression. The current
+  synchronous engine supports ZIP32 stored/deflate entries, with 64 MiB limits
+  for the compressed archive and total expanded contents, and 20,000 entries.
+  ZIP64, encrypted, split and symlink archives are explicitly unsupported.
+- Corrupt sizes/CRC values and colliding normalized paths are rejected. These
+  bounds reduce memory risk; they are not a guarantee against device memory
+  exhaustion or UI stalls.
 - `Repackage & Place`: rebuilds the ZIP, verifies it re-parses and every entry
   round-trips, computes a checksum, and only then writes it into the pane's
-  current folder. On any failure the staging workspace is retained.
+  selected destination. Existing destination names are rejected rather than
+  overwritten. On placement failure the staging workspace is retained. The
+  displayed checksum detects changes; it is not an authenticity signature.
 
 Reachable in-app: right-click a `.zip` → **Open in Limbo**, inspect in the
 bottom-right Limbo panel, then right-click a destination folder →
@@ -79,10 +88,17 @@ Output APK: `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Honest status
 
-Done and verified: Android target restored; touch-adapted window UI; native
-Capacitor filesystem operations; functional Limbo ZIP extract + verified
-repackage with safety rails and passing unit tests; real signed debug APK that
-builds, verifies, and is installable.
+Implemented: Android target, touch-adapted window UI, Capacitor filesystem
+operations, and Limbo ZIP extraction/repackaging. Host tests, browser checks,
+compilation and APK signature checks establish their specific layers only;
+they do not establish successful installation or provider access on a phone.
+
+Mutations are serialized within the app, and supported source identities,
+destinations and native copy/delete results are checked. Android remains a
+path-based backend, not a SAF tree-provider implementation. The available web
+and Capacitor operations do not provide a transaction across other apps:
+external changes may race operations, and interrupted transfers may leave a
+partial destination. Staging uses cache storage, which Android may evict.
 
 Not yet implemented (tracked, not mocked): persistent SKU/Magnetism and
 WHO/WHAT/WHEN/WHERE search bound to real on-device paths, the global timeline
