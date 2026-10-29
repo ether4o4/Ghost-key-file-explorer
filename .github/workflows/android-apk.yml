@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   android-apk:
     runs-on: ubuntu-latest
@@ -28,12 +31,23 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+          log-accepted-android-sdk-licenses: false
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build web app
         run: npm run build
+
+      - name: Filesystem, archive and persistence regressions
+        run: npm test
+
+      - name: Active explorer lint
+        run: |
+          npx eslint src/components/explorer src/core/fs.ts src/core/archive.ts src/core/pathutil.ts src/store/explorerStore.ts src/components/common src/utils
+          node --check public/sw.js
 
       - name: Sync Capacitor Android
         run: npx cap sync android
@@ -42,10 +56,18 @@ jobs:
         working-directory: android
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug testDebugUnitTest lintDebug
+
+      - name: Verify debug APK signature
+        run: |
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs android/app/build/outputs/apk/debug/app-debug.apk
+          sha256sum android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug/app-debug.apk.sha256
 
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
           name: Ghost-Key-File-Explorer-installable-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/apk/debug/app-debug.apk.sha256
+          if-no-files-found: error

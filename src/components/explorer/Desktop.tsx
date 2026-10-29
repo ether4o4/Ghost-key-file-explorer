@@ -13,11 +13,18 @@ export const Desktop: React.FC = () => {
   }, [init]);
 
   return (
-    <div className="fixed inset-0 gk-desktop overflow-hidden select-none">
+    <div
+      className="fixed inset-0 gk-desktop overflow-hidden select-none"
+      style={{
+        paddingTop: 'var(--gk-inset-top)',
+        paddingLeft: 'var(--gk-inset-left)',
+        paddingRight: 'var(--gk-inset-right)',
+      }}
+    >
       <div className="absolute inset-0 gk-grid-overlay pointer-events-none opacity-60" />
 
       {/* Brand watermark */}
-      <div className="absolute top-6 left-6 pointer-events-none">
+      <div className="absolute left-6 pointer-events-none" style={{ top: 'calc(var(--gk-inset-top) + 1rem)' }}>
         <div className="text-2xl font-bold tracking-tight text-ghost-text/90">
           👻 Ghost <span className="text-ghost-accent">Explorer</span>
         </div>
@@ -25,7 +32,10 @@ export const Desktop: React.FC = () => {
       </div>
 
       {/* Windows layer (above wallpaper, below taskbar) */}
-      <div className="absolute inset-x-0 top-0" style={{ bottom: 48 }}>
+      <div
+        className="absolute"
+        style={{ top: 'var(--gk-inset-top)', bottom: 'calc(48px + var(--gk-inset-bottom))', left: 'var(--gk-inset-left)', right: 'var(--gk-inset-right)' }}
+      >
         {windows.map((w) => (
           <ExplorerWindow key={w.id} win={w} />
         ))}
@@ -43,6 +53,7 @@ export const Desktop: React.FC = () => {
       </div>
 
       <Taskbar />
+      <LimboPanel />
 
       {toast && (
         <div
@@ -79,7 +90,10 @@ const Taskbar: React.FC = () => {
   };
 
   return (
-    <div className="absolute bottom-0 inset-x-0 h-12 flex items-center gap-2 px-2 bg-ghost-surface/85 backdrop-blur border-t border-ghost-border z-50">
+    <div
+      className="absolute bottom-0 inset-x-0 flex items-center gap-2 px-2 bg-ghost-surface/85 backdrop-blur border-t border-ghost-border z-50"
+      style={{ height: 'calc(48px + var(--gk-inset-bottom))', paddingBottom: 'var(--gk-inset-bottom)', paddingLeft: 'calc(8px + var(--gk-inset-left))', paddingRight: 'calc(8px + var(--gk-inset-right))' }}
+    >
       <button
         onClick={() => useExplorer.getState().newWindow()}
         title="New window"
@@ -116,6 +130,57 @@ const Taskbar: React.FC = () => {
 
       <div className="text-[11px] text-ghost-muted font-mono px-2 shrink-0">
         {clock.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Limbo workspace panel — shows the isolated staging area after a ZIP is opened
+ * in Limbo, so the user can see what was extracted and discard it. Repackaging
+ * is driven from a pane's context menu (into that pane's current folder).
+ */
+const LimboPanel: React.FC = () => {
+  const limbo = useExplorer((s) => s.limbo);
+  if (!limbo) return null;
+  const sizeMiB = (limbo.totalBytes / 1048576).toFixed(1);
+  const preview = limbo.entries.filter((e) => !e.isDir).slice(0, 6);
+  return (
+    <div
+      className="absolute right-4 z-40 w-72 rounded-xl border border-ghost-accent/40 bg-ghost-surface/95 backdrop-blur shadow-2xl glass animate-fade-in"
+      style={{ bottom: 'calc(60px + var(--gk-inset-bottom))' }}
+    >
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-ghost-border">
+        <Icon name="archive" size={15} className="text-ghost-accent" />
+        <div className="min-w-0 flex-1">
+          <div className="text-[12px] font-medium text-ghost-text truncate">Limbo · {limbo.archiveName}</div>
+          <div className="text-[10px] text-ghost-muted font-mono">
+            {limbo.fileCount} files · {sizeMiB} MiB · isolated
+          </div>
+        </div>
+        <button
+          title="Discard staging workspace"
+          onClick={() => useExplorer.getState().limboDiscard()}
+          className="w-6 h-6 flex items-center justify-center rounded-md text-ghost-muted hover:bg-ghost-red hover:text-white transition-colors"
+        >
+          <Icon name="x" size={13} />
+        </button>
+      </div>
+      <div className="px-3 py-2 max-h-40 overflow-auto">
+        {preview.map((e) => (
+          <div key={e.path} className="flex items-center gap-1.5 text-[11px] text-ghost-text/90 py-0.5">
+            <Icon name="fileText" size={12} className="text-ghost-muted shrink-0" />
+            <span className="truncate">{e.path}</span>
+          </div>
+        ))}
+        {limbo.fileCount > preview.length && (
+          <div className="text-[10px] text-ghost-muted mt-1">
+            +{limbo.fileCount - preview.length} more…
+          </div>
+        )}
+      </div>
+      <div className="px-3 py-2 border-t border-ghost-border text-[10px] text-ghost-muted">
+        Right-click a destination folder → <span className="text-ghost-accent">Repackage &amp; Place here</span>
       </div>
     </div>
   );

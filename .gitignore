@@ -22,3 +22,13 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Android build toolchain (machine-local; provisioned by setup script)
+.android-toolchain/
+env.sh
+android/.gradle/
+android/app/src/main/assets/public/
+android/app/build/
+node_modules.cache-link*
+.node_modules.trash.*
+tests/.compiled/

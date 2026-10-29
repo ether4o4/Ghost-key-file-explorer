@@ -11,22 +11,8 @@ on:
         description: APK asset name
         required: false
         default: ghost-key-file-explorer.apk
-  # Rolling release: every push that changes the app refreshes the APK asset on the
-  # fixed `android-preview` tag, so the README download link always serves the latest
-  # build. `main` keeps it current after merge; the feature branch keeps it current now.
-  push:
-    branches:
-      - main
-      - claude/draggable-dual-pane-explorer-VmZWg
-    paths:
-      - "src/**"
-      - "android/**"
-      - "index.html"
-      - "package.json"
-      - "package-lock.json"
-      - "capacitor.config.ts"
-      - "vite.config.*"
-      - ".github/workflows/publish-android-apk.yml"
+  # Publishing is explicit: a source merge must not replace an existing APK
+  # with a fresh CI debug signing identity. Regular builds remain CI artifacts.
 
 permissions:
   contents: write
@@ -53,12 +39,18 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+          log-accepted-android-sdk-licenses: false
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build web app
         run: npm run build
+
+      - name: Regression tests
+        run: npm test
 
       - name: Sync Capacitor Android
         run: npx cap sync android
@@ -67,7 +59,10 @@ jobs:
         working-directory: android
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug testDebugUnitTest lintDebug
+
+      - name: Verify APK signature
+        run: '"$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose android/app/build/outputs/apk/debug/app-debug.apk'
 
       - name: Stage APK
         env:
@@ -85,7 +80,7 @@ jobs:
           if ! gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             gh release create "${RELEASE_TAG}" \
               --title "Ghost Key Android Preview" \
-              --notes "Stable installable debug APK for Ghost Key File Explorer." \
+              --notes "Debug test APK for Ghost Key File Explorer. Installation and update compatibility require device verification." \
               --prerelease
           fi
 

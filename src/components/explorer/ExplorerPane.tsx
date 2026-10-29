@@ -46,6 +46,7 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
   const roots = useExplorer((s) => s.roots);
   const adapter = useExplorer((s) => s.adapter);
   const folderPrefs = useExplorer((s) => s.folderPrefs);
+  const limbo = useExplorer((s) => s.limbo);
 
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [customize, setCustomize] = useState<CustomizeState | null>(null);
@@ -128,9 +129,7 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
     if (getDrag()) {
       s().internalDrop(winId, side, destEntry, copy);
     } else if (e.dataTransfer.files?.length || e.dataTransfer.items?.length) {
-      // External (OS / browser) drop — if onto a folder, dive in first conceptually;
-      // for simplicity external imports always land in the current directory.
-      s().externalDrop(winId, side, e.dataTransfer);
+      s().externalDrop(winId, side, e.dataTransfer, destEntry);
     }
   };
 
@@ -452,6 +451,13 @@ const ExplorerPaneInner: React.FC<Props> = ({ winId, side }) => {
           onRefresh={() => s().refresh(winId, side)}
           onCopyOther={() => menu.entry && transferTo(menu.entry, 'copy')}
           onMoveOther={() => menu.entry && transferTo(menu.entry, 'move')}
+          onLimbo={
+            menu.entry && menu.entry.kind === 'file' && menu.entry.ext.toLowerCase() === 'zip'
+              ? () => s().limboOpen(winId, side, menu.entry!)
+              : undefined
+          }
+          onRepackageHere={() => s().limboRepackagePlace(winId, side, menu.entry)}
+          hasLimbo={!!limbo}
           onCustomize={menu.entry && menu.entry.kind === 'directory' ? () => openCustomize(menu.entry!) : undefined}
         />
       )}
@@ -538,8 +544,11 @@ const ContextMenu: React.FC<{
   onRefresh: () => void;
   onCopyOther: () => void;
   onMoveOther: () => void;
+  onLimbo?: () => void;
+  onRepackageHere: () => void;
+  hasLimbo: boolean;
   onCustomize?: () => void;
-}> = ({ menu, close, onOpen, onRename, onDelete, onNewFolder, onRefresh, onCopyOther, onMoveOther, onCustomize }) => {
+}> = ({ menu, close, onOpen, onRename, onDelete, onNewFolder, onRefresh, onCopyOther, onMoveOther, onLimbo, onRepackageHere, hasLimbo, onCustomize }) => {
   const hasEntry = !!menu.entry;
   const item = (label: string, icon: IconName, fn: () => void, danger?: boolean) => (
     <button
@@ -567,6 +576,9 @@ const ContextMenu: React.FC<{
         {onCustomize && item('Customize…', 'grid', onCustomize)}
         {hasEntry && item('Copy → other pane', 'copy', onCopyOther)}
         {hasEntry && item('Move → other pane', 'move', onMoveOther)}
+        {onLimbo && <div className="my-1 h-px bg-ghost-border" />}
+        {onLimbo && item('Open in Limbo (inspect ZIP)', 'archive', onLimbo)}
+        {hasLimbo && item('Repackage & Place here', 'download', onRepackageHere)}
         {hasEntry && <div className="my-1 h-px bg-ghost-border" />}
         {item('New folder', 'folderPlus', onNewFolder)}
         {item('Refresh', 'refresh', onRefresh)}

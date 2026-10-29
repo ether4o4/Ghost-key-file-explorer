@@ -2,6 +2,11 @@
 
 > A draggable, dual-pane file explorer — Windows Explorer ergonomics, Ghost Key aesthetic.
 
+The active application is the Android/Capacitor explorer, with a browser preview,
+single/dual-pane windows and ZIP staging/repackaging. The intelligence, vault and
+timeline descriptions below also cover retained legacy modules; they are not all
+connected to the current explorer. See [Android status](docs/GHOST_KEY_ANDROID.md).
+
 The app boots straight into a **desktop shell**: draggable / minimizeable / maximizeable / resizable
 windows, each hosting a **two-pane file manager** with real read/write access to the filesystem —
 **no root required**.
@@ -24,10 +29,18 @@ windows, each hosting a **two-pane file manager** with real read/write access to
 ### Get the Android APK
 
 - **CI artifact:** the **Build Android APK** workflow runs on every push/PR and uploads
-  `Ghost-Key-File-Explorer-installable-debug-apk`.
+  `Ghost-Key-File-Explorer-installable-debug-apk`, including the debug APK and its
+  SHA-256 checksum. Use the latest successful [main-branch build](https://github.com/ether4o4/Ghost-key-file-explorer/actions/workflows/android-apk.yml?query=branch%3Amain).
 - **Release asset:** run the **Publish Android APK** workflow (`workflow_dispatch`) to attach a stable
   `ghost-key-file-explorer.apk` to the `android-preview` release.
 - **Local:** `npm run android:apk`.
+
+The workflow checks tests, lint, compilation and the APK signature. Phone
+installation and filesystem-provider behavior still require device testing.
+CI debug keys can differ between runs; updating an existing installation requires
+its original signing key. Do not uninstall an existing app to work around a key
+mismatch if its local data needs to be retained. The files in `skywork-backup/`
+are the unchanged historical recovery artifacts, not builds of later repairs.
 
 > ℹ️ The original file-intelligence engine (tagging, vaults, timeline, analysis) still lives in
 > `src/core/*` and `src/components/*`; the explorer is now the default surface.
