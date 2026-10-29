@@ -16,6 +16,34 @@ html, body, #root {
   font-family: 'Inter', system-ui, sans-serif;
 }
 
+/* ── Android / touch shell ───────────────────────────────────────────────
+   Running inside a Capacitor WebView: kill the native overscroll/bounce,
+   text callouts, tap highlight and double-tap-zoom so the in-app desktop
+   feels like a real file manager, not a scrollable web page. */
+html, body {
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+/* Safe-area inset variables (status bar / nav bar / notch), with fallbacks. */
+:root {
+  --gk-inset-top: env(safe-area-inset-top, 0px);
+  --gk-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --gk-inset-left: env(safe-area-inset-left, 0px);
+  --gk-inset-right: env(safe-area-inset-right, 0px);
+}
+
+/* Elements that own a drag/resize gesture must not let the WebView treat the
+   gesture as a scroll/zoom — otherwise the window "sticks" on a real phone. */
+.gk-gesture { touch-action: none; }
+
+/* Inputs/areas that still need text selection (rename fields, previews). */
+.gk-selectable { -webkit-user-select: text; user-select: text; }
+
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: #111318; }
 ::-webkit-scrollbar-thumb { background: #252830; border-radius: 2px; }

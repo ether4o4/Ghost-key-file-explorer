@@ -16,6 +16,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { Directory, Filesystem } from '@capacitor/filesystem';
+import { safeSegments } from './pathutil';
 
 // ─── Shared types ───────────────────────────────────────────────────────────────
 
@@ -67,6 +68,19 @@ export interface FsAdapter {
   importFiles(files: File[], destDir: DirRef): Promise<number>;
   importDrop(dt: DataTransfer, destDir: DirRef): Promise<number>;
   resolveUrl(entry: DirEntry): Promise<{ url: string; revoke?: () => void }>;
+  /** Read a file entry's raw bytes (used by the Limbo archive engine). */
+  readBytes(entry: DirEntry): Promise<Uint8Array>;
+  /**
+   * Create or return an isolated, app-private staging directory that is NOT part
+   * of the user's managed library (used by Limbo). `sub` is a workspace id.
+   */
+  stagingDir(sub: string): Promise<DirRef>;
+  /** Write raw bytes to `name` inside `dir`, creating parents as needed. */
+  writeBytes(dir: DirRef, relPath: string, bytes: Uint8Array): Promise<void>;
+  /** Ensure a (possibly nested) sub-directory exists under `dir`; returns it. */
+  ensureDir(dir: DirRef, relPath: string): Promise<DirRef>;
+  /** Recursively delete a staging directory created by `stagingDir`. */
+  removeDir(dir: DirRef): Promise<void>;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -100,6 +114,15 @@ function base64FromBuffer(buf: ArrayBuffer): string {
   }
   return btoa(binary);
 }
+
+function bufferFromBase64(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
+export { safeSegments };
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  WEB — File System Access API
@@ -353,6 +376,67 @@ const webAdapter: FsAdapter = {
     const url = URL.createObjectURL(file);
     return { url, revoke: () => URL.revokeObjectURL(url) };
   },
+
+  async readBytes(entry) {
+    const file = await (entry.handle as FSFileHandle).getFile();
+    return new Uint8Array(await file.arrayBuffer());
+  },
+
+  // Web has no app-private storage root, so Limbo stages inside an OPFS-backed
+  // directory when available; otherwise it falls back to an in-memory handle via
+  // the origin-private file system. The user's picked folders are never touched.
+  async stagingDir(sub) {
+    const navAny = navigator as unknown as {
+      storage?: { getDirectory?: () => Promise<FSDirHandle> };
+    };
+    if (!navAny.storage?.getDirectory) {
+      throw new Error('Isolated staging is unavailable in this browser.');
+    }
+    const root = await navAny.storage.getDirectory();
+    const limbo = await root.getDirectoryHandle('gk-limbo', { create: true });
+    const ws = await limbo.getDirectoryHandle(sub, { create: true });
+    return { backend: 'web', name: sub, handle: ws };
+  },
+
+  async ensureDir(dir, relPath) {
+    let handle = dir.handle!;
+    for (const seg of safeSegments(relPath)) {
+      handle = await handle.getDirectoryHandle(seg, { create: true });
+    }
+    return { backend: 'web', name: handle.name, handle };
+  },
+
+  async writeBytes(dir, relPath, bytes) {
+    const segs = safeSegments(relPath);
+    const fileName = segs.pop();
+    if (!fileName) throw new Error('Empty file path');
+    let handle = dir.handle!;
+    for (const seg of segs) handle = await handle.getDirectoryHandle(seg, { create: true });
+    const fh = await handle.getFileHandle(fileName, { create: true });
+    const w = await fh.createWritable();
+    try {
+      await w.write(
+        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+      );
+    } finally {
+      await w.close();
+    }
+  },
+
+  async removeDir(dir) {
+    // Remove the workspace directory from its OPFS parent.
+    const navAny = navigator as unknown as {
+      storage?: { getDirectory?: () => Promise<FSDirHandle> };
+    };
+    if (!navAny.storage?.getDirectory) return;
+    try {
+      const root = await navAny.storage.getDirectory();
+      const limbo = await root.getDirectoryHandle('gk-limbo', { create: true });
+      await limbo.removeEntry(dir.name, { recursive: true });
+    } catch {
+      /* already gone */
+    }
+  },
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -486,6 +570,50 @@ const nativeAdapter: FsAdapter = {
 
   async resolveUrl(entry) {
     return { url: Capacitor.convertFileSrc(entry.uri!) };
+  },
+
+  async readBytes(entry) {
+    const res = await Filesystem.readFile({ path: entry.uri! });
+    // Native returns base64 string; web (rare) could return a Blob.
+    if (typeof res.data === 'string') return bufferFromBase64(res.data);
+    return new Uint8Array(await (res.data as Blob).arrayBuffer());
+  },
+
+  // Limbo stages in app-private Cache storage — isolated from the user's library
+  // and auto-evictable by the OS. We return the resolved absolute uri.
+  async stagingDir(sub) {
+    await Filesystem.mkdir({
+      directory: Directory.Cache,
+      path: `gk-limbo/${sub}`,
+      recursive: true,
+    }).catch(() => {});
+    const { uri } = await Filesystem.getUri({ directory: Directory.Cache, path: `gk-limbo/${sub}` });
+    return { backend: 'native', name: sub, uri: uri.replace(/\/+$/, '') };
+  },
+
+  async ensureDir(dir, relPath) {
+    const segs = safeSegments(relPath);
+    const uri = segs.length ? joinUri(dir.uri!, segs.join('/')) : dir.uri!;
+    await Filesystem.mkdir({ path: uri, recursive: true }).catch(() => {});
+    return { backend: 'native', name: segs[segs.length - 1] ?? dir.name, uri };
+  },
+
+  async writeBytes(dir, relPath, bytes) {
+    const segs = safeSegments(relPath);
+    const fileName = segs.pop();
+    if (!fileName) throw new Error('Empty file path');
+    const parentUri = segs.length ? joinUri(dir.uri!, segs.join('/')) : dir.uri!;
+    if (segs.length) await Filesystem.mkdir({ path: parentUri, recursive: true }).catch(() => {});
+    await Filesystem.writeFile({
+      path: joinUri(parentUri, fileName),
+      data: base64FromBuffer(
+        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+      ),
+    });
+  },
+
+  async removeDir(dir) {
+    await Filesystem.rmdir({ path: dir.uri!, recursive: true }).catch(() => {});
   },
 };
 

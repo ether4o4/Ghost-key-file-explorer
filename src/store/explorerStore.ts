@@ -8,9 +8,11 @@
 import { create } from 'zustand';
 import { getAdapter } from '../core/fs';
 import type { DirEntry, DirRef, FsAdapter, RootShortcut } from '../core/fs';
+import { extractToLimbo, repackage } from '../core/archive';
 
 export type Side = 'left' | 'right';
 export type ViewMode = 'list' | 'grid';
+export type LayoutMode = 'single' | 'dual';
 export type SortKey = 'name' | 'size' | 'mtime' | 'kind';
 export type ToastKind = 'info' | 'success' | 'error';
 
@@ -35,6 +37,7 @@ export interface WindowState {
   z: number;
   minimized: boolean;
   maximized: boolean;
+  layout: LayoutMode;
   splitter: number; // left-pane fraction (0..1)
   panes: Record<Side, PaneState>;
   restore?: { x: number; y: number; w: number; h: number };
@@ -79,7 +82,65 @@ export interface FolderPref {
   color?: string;
   icon?: string;
 }
+
+/** An active Limbo staging workspace produced by extracting an archive. */
+export interface LimboWorkspace {
+  id: string;
+  archiveName: string;
+  workspace: DirRef;
+  entries: Array<{ path: string; size: number; isDir: boolean }>;
+  totalBytes: number;
+  fileCount: number;
+  sourceWinId: number;
+  sourceSide: Side;
+}
 const PREFS_KEY = 'gk:folderPrefs';
+const LAYOUT_KEY = 'gk:layoutMode';
+const WINDOW_KEY = 'gk:windowBounds';
+
+interface WindowPrefs {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  maximized: boolean;
+}
+
+function loadLayoutMode(): LayoutMode {
+  try {
+    return localStorage.getItem(LAYOUT_KEY) === 'single' ? 'single' : 'dual';
+  } catch {
+    return 'dual';
+  }
+}
+
+function saveLayoutMode(mode: LayoutMode): void {
+  try {
+    localStorage.setItem(LAYOUT_KEY, mode);
+  } catch {
+    /* storage unavailable / full — keep the in-memory preference */
+  }
+}
+
+function loadWindowPrefs(): Partial<WindowPrefs> {
+  try {
+    const raw = localStorage.getItem(WINDOW_KEY);
+    return raw ? (JSON.parse(raw) as Partial<WindowPrefs>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveWindowPrefs(win: Pick<WindowState, 'x' | 'y' | 'w' | 'h' | 'maximized'>): void {
+  try {
+    localStorage.setItem(
+      WINDOW_KEY,
+      JSON.stringify({ x: win.x, y: win.y, w: win.w, h: win.h, maximized: win.maximized }),
+    );
+  } catch {
+    /* storage unavailable / full — keep the in-memory window state */
+  }
+}
 
 function loadPrefs(): Record<string, FolderPref> {
   try {
@@ -111,6 +172,7 @@ interface ExplorerStore {
   nextId: number;
   toast: { msg: string; kind: ToastKind } | null;
   folderPrefs: Record<string, FolderPref>;
+  limbo: LimboWorkspace | null;
 
   init: () => Promise<void>;
   notify: (msg: string, kind?: ToastKind) => void;
@@ -127,7 +189,10 @@ interface ExplorerStore {
   minimize: (id: number) => void;
   unminimize: (id: number) => void;
   toggleMax: (id: number) => void;
+  toggleLayout: (id: number) => void;
+  setLayout: (id: number, mode: LayoutMode) => void;
   setSplitter: (id: number, frac: number) => void;
+  resetSplitter: (id: number) => void;
 
   // ── Pane navigation ──
   openPicker: (id: number, side: Side) => Promise<void>;
@@ -151,6 +216,11 @@ interface ExplorerStore {
   // ── Drag & drop ──
   internalDrop: (id: number, side: Side, destEntry: DirEntry | null, copy: boolean) => Promise<void>;
   externalDrop: (id: number, side: Side, dt: DataTransfer) => Promise<void>;
+
+  // ── Limbo archive workflow ──
+  limboOpen: (id: number, side: Side, entry: DirEntry) => Promise<void>;
+  limboRepackagePlace: (id: number, side: Side) => Promise<void>;
+  limboDiscard: () => Promise<void>;
 }
 
 export const useExplorer = create<ExplorerStore>((set, get) => {
@@ -193,6 +263,7 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
     nextId: 1,
     toast: null,
     folderPrefs: {},
+    limbo: null,
 
     init: async () => {
       const adapter = getAdapter();
@@ -238,16 +309,18 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       const w = Math.min(1100, Math.max(720, Math.round(vw * 0.78)));
       const h = Math.min(720, Math.max(440, Math.round(vh * 0.74)));
       const offset = (windows.length % 6) * 28;
+      const saved = loadWindowPrefs();
       const win: WindowState = {
         id: nextId,
         title: 'Ghost Explorer',
-        x: Math.max(12, Math.round((vw - w) / 2) + offset),
-        y: Math.max(12, Math.round((vh - h) / 2) - 16 + offset),
-        w,
-        h,
+        x: Math.max(12, Math.min(vw - 120, saved.x ?? Math.round((vw - w) / 2) + offset)),
+        y: Math.max(12, Math.min(vh - 84, saved.y ?? Math.round((vh - h) / 2) - 16 + offset)),
+        w: Math.min(vw - 24, Math.max(420, saved.w ?? w)),
+        h: Math.min(vh - 72, Math.max(280, saved.h ?? h)),
         z: zTop + 1,
         minimized: false,
-        maximized: vw < 760, // phones: start maximized
+        maximized: saved.maximized ?? vw < 760, // phones: start maximized
+        layout: loadLayoutMode(),
         splitter: 0.5,
         panes: { left: emptyPane(), right: emptyPane() },
       };
@@ -262,7 +335,13 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       patchWindow(id, (w) => ({ ...w, z: zTop }));
     },
 
-    setBounds: (id, b) => patchWindow(id, (w) => ({ ...w, ...b })),
+    setBounds: (id, b) => {
+      patchWindow(id, (w) => {
+        const next = { ...w, ...b };
+        saveWindowPrefs(next);
+        return next;
+      });
+    },
 
     minimize: (id) => patchWindow(id, (w) => ({ ...w, minimized: true })),
 
@@ -275,13 +354,31 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       patchWindow(id, (w) => {
         if (w.maximized) {
           const r = w.restore ?? { x: w.x, y: w.y, w: w.w, h: w.h };
-          return { ...w, maximized: false, ...r, restore: undefined };
+          const next = { ...w, maximized: false, ...r, restore: undefined };
+          saveWindowPrefs(next);
+          return next;
         }
-        return { ...w, maximized: true, restore: { x: w.x, y: w.y, w: w.w, h: w.h } };
+        const next = { ...w, maximized: true, restore: { x: w.x, y: w.y, w: w.w, h: w.h } };
+        saveWindowPrefs(next);
+        return next;
       }),
+
+    toggleLayout: (id) => {
+      const current = get().windows.find((w) => w.id === id)?.layout ?? 'dual';
+      const layout: LayoutMode = current === 'dual' ? 'single' : 'dual';
+      saveLayoutMode(layout);
+      patchWindow(id, (w) => ({ ...w, layout }));
+    },
+
+    setLayout: (id, layout) => {
+      saveLayoutMode(layout);
+      patchWindow(id, (w) => ({ ...w, layout }));
+    },
 
     setSplitter: (id, frac) =>
       patchWindow(id, (w) => ({ ...w, splitter: Math.min(0.85, Math.max(0.15, frac)) })),
+
+    resetSplitter: (id) => patchWindow(id, (w) => ({ ...w, splitter: 0.5 })),
 
     // ── Navigation ──
     openPicker: async (id, side) => {
@@ -469,6 +566,99 @@ export const useExplorer = create<ExplorerStore>((set, get) => {
       } catch (e) {
         get().notify(e instanceof Error ? e.message : 'Import failed', 'error');
       }
+    },
+
+    // ── Limbo archive workflow ──
+    limboOpen: async (id, side, entry) => {
+      if (entry.kind !== 'file' || entry.ext.toLowerCase() !== 'zip') {
+        get().notify('Limbo inspection is for .zip archives', 'info');
+        return;
+      }
+      // Discard any previous workspace to keep staging isolated and bounded.
+      const prev = get().limbo;
+      if (prev) await get().adapter.removeDir(prev.workspace).catch(() => {});
+      get().notify(`Extracting "${entry.name}" into Limbo…`, 'info');
+      try {
+        const res = await extractToLimbo(get().adapter, entry);
+        set({
+          limbo: {
+            id: res.workspaceId,
+            archiveName: entry.name,
+            workspace: res.workspace,
+            entries: res.entries,
+            totalBytes: res.totalBytes,
+            fileCount: res.fileCount,
+            sourceWinId: id,
+            sourceSide: side,
+          },
+        });
+        get().notify(
+          `Limbo ready: ${res.fileCount} file(s), ${(res.totalBytes / 1048576).toFixed(1)} MiB staged`,
+          'success',
+        );
+      } catch (e) {
+        get().notify(e instanceof Error ? e.message : 'Limbo extraction failed', 'error');
+      }
+    },
+
+    limboRepackagePlace: async (id, side) => {
+      const ws = get().limbo;
+      if (!ws) {
+        get().notify('No Limbo workspace is open', 'info');
+        return;
+      }
+      const dir = currentDir(id, side);
+      if (!dir) {
+        get().notify('Open a destination folder in this pane first', 'info');
+        return;
+      }
+      const archiveName =
+        window.prompt('Save repackaged archive as', ws.archiveName) ?? '';
+      if (!archiveName.trim()) return;
+      try {
+        // Read every staged file back from the isolated workspace.
+        const files: Record<string, Uint8Array> = {};
+        const walk = async (relBase: string) => {
+          const sub: DirRef =
+            relBase === ''
+              ? ws.workspace
+              : await get().adapter.ensureDir(ws.workspace, relBase);
+          const listed = await get().adapter.list(sub);
+          for (const e of listed) {
+            const rel = relBase ? `${relBase}/${e.name}` : e.name;
+            if (e.kind === 'directory') await walk(rel);
+            else files[rel] = await get().adapter.readBytes(e);
+          }
+        };
+        await walk('');
+
+        const result = repackage(files);
+        if (!result.verified) throw new Error('Verification failed');
+
+        // Only now, after a verified rebuild, write into the chosen destination.
+        const finalName = archiveName.trim().toLowerCase().endsWith('.zip')
+          ? archiveName.trim()
+          : `${archiveName.trim()}.zip`;
+        await get().adapter.writeBytes(dir, finalName, result.bytes);
+        await get().refresh(id, side);
+        get().notify(
+          `Placed "${finalName}" (${result.entryCount} entries, checksum ${result.checksum.slice(0, 8)})`,
+          'success',
+        );
+      } catch (e) {
+        get().notify(
+          e instanceof Error ? e.message : 'Repackage & Place failed — archive not placed',
+          'error',
+        );
+      }
+    },
+
+    limboDiscard: async () => {
+      const ws = get().limbo;
+      if (!ws) return;
+      await get().adapter.removeDir(ws.workspace).catch(() => {});
+      set({ limbo: null });
+      get().notify('Limbo workspace discarded', 'info');
     },
   };
 });

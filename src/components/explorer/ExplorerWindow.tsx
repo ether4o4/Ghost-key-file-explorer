@@ -109,7 +109,8 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
     ? { left: 0, top: 0, width: '100%', height: '100%', zIndex: win.z }
     : { left: win.x, top: win.y, width: win.w, height: win.h, zIndex: win.z };
 
-  const leftPct = `${(win.splitter * 100).toFixed(2)}%`;
+  const dual = win.layout === 'dual';
+  const leftPct = dual ? `${(win.splitter * 100).toFixed(2)}%` : '100%';
 
   return (
     <div
@@ -121,7 +122,7 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
       <div
         onPointerDown={startMove}
         onDoubleClick={() => store().toggleMax(win.id)}
-        className="flex items-center gap-2 h-9 px-3 shrink-0 bg-ghost-surface border-b border-ghost-border cursor-default select-none"
+        className="gk-gesture flex items-center gap-2 h-11 px-3 shrink-0 bg-ghost-surface border-b border-ghost-border cursor-default select-none"
       >
         <div className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-ghost-accent" />
@@ -137,6 +138,13 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
         <WinBtn title={win.maximized ? 'Restore' : 'Maximize'} onClick={() => store().toggleMax(win.id)}>
           <Icon name={win.maximized ? 'restore' : 'square'} size={13} />
         </WinBtn>
+        <WinBtn
+          title={win.layout === 'dual' ? 'Use single pane' : 'Use dual pane'}
+          onClick={() => store().toggleLayout(win.id)}
+          active={win.layout === 'dual'}
+        >
+          <Icon name="columns" size={14} />
+        </WinBtn>
         <WinBtn title="Close" danger onClick={() => store().closeWindow(win.id)}>
           <Icon name="x" size={14} />
         </WinBtn>
@@ -144,28 +152,38 @@ export const ExplorerWindow: React.FC<{ win: WindowState }> = ({ win }) => {
 
       {/* Dual-pane body */}
       <div className="flex-1 flex min-h-0">
-        <div style={{ width: leftPct }} className="min-w-0 border-r border-ghost-border">
+        <div style={{ width: leftPct }} className={`min-w-0 ${dual ? 'border-r border-ghost-border' : ''}`}>
           <ExplorerPane winId={win.id} side="left" />
         </div>
-        {/* Splitter */}
-        <div
-          onPointerDown={startSplit}
-          className="w-1.5 shrink-0 cursor-col-resize bg-ghost-border hover:bg-ghost-accent transition-colors"
-          title="Drag to resize panes"
-        />
-        <div style={{ width: `calc(100% - ${leftPct} - 6px)` }} className="min-w-0">
-          <ExplorerPane winId={win.id} side="right" />
-        </div>
+        {dual && (
+          <>
+            {/* Splitter */}
+            <div
+              onPointerDown={startSplit}
+              onDoubleClick={() => store().resetSplitter(win.id)}
+              className="gk-gesture relative w-3 shrink-0 cursor-col-resize bg-ghost-border hover:bg-ghost-accent active:bg-ghost-accent transition-colors flex items-center justify-center"
+              title="Drag to resize panes · double-click to balance"
+            >
+              <span className="pointer-events-none h-8 w-0.5 rounded-full bg-ghost-muted/50" />
+            </div>
+            <div style={{ width: `calc(100% - ${leftPct} - 6px)` }} className="min-w-0">
+              <ExplorerPane winId={win.id} side="right" />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Resize handles (hidden when maximized) */}
       {!win.maximized && (
         <>
-          <div onPointerDown={startResize('e')} className="absolute top-9 right-0 w-1.5 h-[calc(100%-2.25rem)] cursor-e-resize" />
-          <div onPointerDown={startResize('s')} className="absolute bottom-0 left-0 w-full h-1.5 cursor-s-resize" />
-          <div onPointerDown={startResize('w')} className="absolute top-9 left-0 w-1.5 h-[calc(100%-2.25rem)] cursor-w-resize" />
-          <div onPointerDown={startResize('se')} className="absolute bottom-0 right-0 w-3.5 h-3.5 cursor-se-resize" />
-          <div onPointerDown={startResize('sw')} className="absolute bottom-0 left-0 w-3.5 h-3.5 cursor-sw-resize" />
+          <div onPointerDown={startResize('e')} className="gk-gesture absolute top-11 right-0 w-3 h-[calc(100%-2.75rem)] cursor-e-resize" />
+          <div onPointerDown={startResize('s')} className="gk-gesture absolute bottom-0 left-0 w-full h-3 cursor-s-resize" />
+          <div onPointerDown={startResize('w')} className="gk-gesture absolute top-11 left-0 w-3 h-[calc(100%-2.75rem)] cursor-w-resize" />
+          <div onPointerDown={startResize('n')} className="gk-gesture absolute top-0 left-10 right-10 h-2 cursor-n-resize" />
+          <div onPointerDown={startResize('se')} className="gk-gesture absolute bottom-0 right-0 w-6 h-6 cursor-se-resize" />
+          <div onPointerDown={startResize('sw')} className="gk-gesture absolute bottom-0 left-0 w-6 h-6 cursor-sw-resize" />
+          <div onPointerDown={startResize('ne')} className="gk-gesture absolute top-0 right-0 w-6 h-6 cursor-ne-resize" />
+          <div onPointerDown={startResize('nw')} className="gk-gesture absolute top-0 left-0 w-6 h-6 cursor-nw-resize" />
         </>
       )}
     </div>
@@ -176,8 +194,9 @@ const WinBtn: React.FC<{
   title: string;
   onClick: () => void;
   danger?: boolean;
+  active?: boolean;
   children: React.ReactNode;
-}> = ({ title, onClick, danger, children }) => (
+}> = ({ title, onClick, danger, active, children }) => (
   <button
     title={title}
     onPointerDown={(e) => e.stopPropagation()}
@@ -185,9 +204,9 @@ const WinBtn: React.FC<{
       e.stopPropagation();
       onClick();
     }}
-    className={`w-7 h-7 flex items-center justify-center rounded-md text-ghost-muted transition-colors ${
+    className={`w-7 h-7 flex items-center justify-center rounded-md transition-colors ${
       danger ? 'hover:bg-ghost-red hover:text-white' : 'hover:bg-ghost-card hover:text-ghost-text'
-    }`}
+    } ${active ? 'text-ghost-accent bg-ghost-accent/10' : 'text-ghost-muted'}`}
   >
     {children}
   </button>

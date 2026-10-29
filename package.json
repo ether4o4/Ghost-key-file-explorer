@@ -9,7 +9,9 @@
     "android:sync": "npm run build && cap sync android",
     "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:archive:compile": "tsc --ignoreConfig src/core/archive.ts src/core/pathutil.ts --outDir tests/.compiled --module esnext --target es2022 --moduleResolution bundler --skipLibCheck --lib es2022 || true",
+    "test:archive": "npm run test:archive:compile && node tests/fix-compiled-imports.mjs && node --test tests/archive.test.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.1",
@@ -21,6 +23,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "clsx": "^2.1.1",
     "dexie": "^4.4.2",
+    "fflate": "^0.8.2",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.14.0",
     "react": "^19.2.5",

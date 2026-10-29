@@ -21,6 +21,7 @@ type IconName =
   | 'minus'
   | 'square'
   | 'restore'
+  | 'columns'
   | 'x'
   | 'chevronRight'
   | 'trash'
@@ -100,6 +101,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <rect x="8" y="8" width="11" height="11" rx="1.5" />
       <path d="M5 16V6a1 1 0 0 1 1-1h10" />
+    </>
+  ),
+  columns: (
+    <>
+      <rect x="3" y="4" width="7" height="16" rx="1.5" />
+      <rect x="14" y="4" width="7" height="16" rx="1.5" />
     </>
   ),
   x: <path d="M6 6l12 12M18 6 6 18" />,
