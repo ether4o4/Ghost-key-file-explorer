@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="gk_window_background">#FF04101F</color>
+    <color name="gk_widget_surface">#E6202020</color>
+    <color name="gk_widget_stroke">#26FFFFFF</color>
+    <color name="gk_widget_text">#FFFFFFFF</color>
+    <color name="gk_widget_text_secondary">#C9FFFFFF</color>
+    <color name="gk_folder_yellow">#FFFFCA28</color>
+</resources>

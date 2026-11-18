@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ghost Key File Explorer</string>
+    <string name="widget_label">Ghost Key folder</string>
+    <string name="widget_description">A folder of apps and files on your home screen</string>
+    <string name="widget_empty">Folder is empty. Tap the title to add apps.</string>
+    <string name="widget_unassigned">Tap to choose a folder</string>
+</resources>

@@ -1,5 +1,9 @@
 # 👻 Ghost Key — File Explorer
 
+> **New: native Android app** in [`native/`](native/README.md). It combines NeverSoft 11's Windows 11
+> File Explorer interface with every Ghost Key feature, plus **home-screen folder widgets** for your apps,
+> and drag & drop across the whole app. The web/Capacitor app below is unchanged.
+
 > A draggable, dual-pane file explorer — Windows Explorer ergonomics, Ghost Key aesthetic.
 
 The active application is the Android/Capacitor explorer, with a browser preview,
